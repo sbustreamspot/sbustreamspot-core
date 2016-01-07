@@ -1,4 +1,3 @@
-3
-A	B	t1
-A	C	t2
-B	D	t3 
+A B t1
+A C t2
+B D t3
