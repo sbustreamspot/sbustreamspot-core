@@ -1,10 +1,13 @@
 CC=g++
-CFLAGS=-Wall --std=c++11 -Ofast -march=native
-TARGET := swoosh
-OBJS := swoosh.o
+CFLAGS=-Wall --std=c++11 -Ofast -march=native -mtune=native -funsafe-loop-optimizations -ffast-math -Ofast 
+SOURCES := swoosh.cpp
+OBJS := $(SOURCES:.cpp=.o)
 
-$(TARGET): $(OBJS)
-	    $(CC) $(CFLAGS) $^ -o $@
+swoosh: swoosh.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+.cpp.o:
+	$(CC) $(CFLAGS) -c $<
 
 clean:
-	    rm -f $(TARGET) $(OBJS)
+	rm -f swoosh $(OBJS)
