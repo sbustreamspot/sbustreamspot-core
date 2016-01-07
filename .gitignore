@@ -1,3 +1,7 @@
+# Custom
+swoosh
+*.swp
+
 # Compiled Object files
 *.slo
 *.lo

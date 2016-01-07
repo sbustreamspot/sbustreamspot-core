@@ -142,5 +142,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  G = vector<vector<pair<string,string>>>(node_id.size());
+
   return 0;
 }
