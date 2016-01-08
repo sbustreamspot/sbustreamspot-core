@@ -15,7 +15,7 @@
 #define TYPE_NAME_SIZE    1
 #define DELIMITER         ' '
 #define L                 100
-#define SMAX              4
+#define SMAX              32
 #define SEED              23
 
 using namespace std;
