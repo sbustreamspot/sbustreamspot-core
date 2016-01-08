@@ -1,23 +1,41 @@
+#include <bitset>
 #include <cstdio>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <iostream>
+#include <random>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
 
-#define DEBUG             1
+#define DEBUG             0
 #define NODE_NAME_SIZE    20
 #define TYPE_NAME_SIZE    1
 #define DELIMITER         ' '
+#define L                 100
+#define SMAX              4
+#define SEED              23
 
 using namespace std;
 
 void panic(string message) {
   cout << message << endl;
   exit(-1);
+}
+
+// Fast multilinear hashing
+// Reference:
+//    Owen Kaser and Daniel Lemire
+//    "Strongly universal string hashing is fast."
+//    Computer Journal, 2014.
+uint32_t hash(const u32string& key, vector<uint64_t>& randbits) {
+  uint64_t sum = randbits[0];
+  for (uint32_t i = 0; i < key.length(); i++) {
+    sum += randbits[i+1] * static_cast<uint64_t>(key[i]);
+  }
+  return static_cast<uint32_t>(sum >> 32);
 }
 
 int read_edges(string filename,
@@ -39,7 +57,10 @@ int read_edges(string filename,
   fstat(fd, &fstatbuf);
 
   // memory map the file
-  data = (char*) mmap(NULL, fstatbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  data = (char*) mmap(NULL, fstatbuf.st_size, PROT_READ, MAP_PRIVATE|MAP_POPULATE,
+                      fd, 0);
+  madvise(data, fstatbuf.st_size, MADV_SEQUENTIAL);
+
   if (data < 0) { // mmap failed
     panic("mmap'ing graph file failed");
     close(fd);
@@ -119,14 +140,41 @@ void print_usage() {
 
 int main(int argc, char *argv[]) {
   unordered_map<string,int> node_id;        // map memory address to an integer
-  vector<pair<pair<int,int>,string>> edges;              // edge list
+  vector<pair<pair<int,int>,string>> edges; // edge list
   vector<vector<pair<string,string>>> G;    // adjacency list w/ edge types
+  bitset<L> sketch;                         // L-bit sketch (initially 0)
+  vector<int> projection(L);                // projection vector
+  vector<vector<uint64_t>> H(L);            // Universal family H, contains
+                                            // L hash functions, each represented by
+                                            // SMAX+2 64-bit random integers
+  mt19937_64 prng(SEED);                    // Mersenne Twister 64-bit PRNG
 
   if (argc != 2) {
     print_usage();
     return -1;
   }
 
+  // allocate random bits for hashing
+  for (int i = 0; i < L; i++) {
+    // hash function h_i \in H
+    H[i] = vector<uint64_t>(SMAX + 2);
+    for (int j = 0; j < SMAX + 2; j++) {
+      // random number m_j of h_i
+      H[i][j] = prng();
+    }
+  }
+
+  if (DEBUG) {
+    cout << "Random numbers:\n";
+    for (int i = 0; i < L; i++) {
+      for (int j = 0; j < SMAX + 2; j++) {
+        cout << H[i][j] << " ";
+      }
+      cout << endl;
+    }
+  }
+
+  // read edges into memory
   read_edges(argv[1], edges, node_id);
 
   if (DEBUG) {
@@ -142,6 +190,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // allocate adjacency list
   G = vector<vector<pair<string,string>>>(node_id.size());
 
   return 0;

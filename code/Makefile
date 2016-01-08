@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-Wall --std=c++11 -Ofast -march=native -mtune=native -funsafe-loop-optimizations -ffast-math -Ofast 
+CFLAGS=-Wall --std=c++11 -O3 -march=native -mtune=native
 SOURCES := swoosh.cpp
 OBJS := $(SOURCES:.cpp=.o)
 
