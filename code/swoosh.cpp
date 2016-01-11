@@ -1,4 +1,5 @@
 #include <bitset>
+#include <cassert>
 #include <cstdio>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -10,7 +11,10 @@
 #include <unordered_map>
 #include <vector>
 
-#define DEBUG             0
+#ifdef DEBUG
+#define NDEBUG            0
+#endif
+
 #define NODE_NAME_SIZE    20
 #define TYPE_NAME_SIZE    1
 #define DELIMITER         ' '
@@ -25,33 +29,34 @@ void panic(string message) {
   exit(-1);
 }
 
-// Fast multilinear hashing
-// Reference:
-//    Owen Kaser and Daniel Lemire
-//    "Strongly universal string hashing is fast."
-//    Computer Journal, 2014.
-uint32_t hash(const u32string& key, vector<uint64_t>& randbits) {
+/* Universal hash from shingle (strings) to {0,1}
+ *
+ * Reference: Fast multilinear hashing
+ *    Owen Kaser and Daniel Lemire
+ *    "Strongly universal string hashing is fast."
+ *    Computer Journal, 2014.
+ */
+uint8_t hashmulti(const string& key, vector<uint64_t>& randbits) {
   uint64_t sum = randbits[0];
   for (uint32_t i = 0; i < key.length(); i++) {
-    sum += randbits[i+1] * static_cast<uint64_t>(key[i]);
+    sum += randbits[i+1] * (static_cast<uint64_t>(key[i]) & 0xff); // sign-extension
   }
-  return static_cast<uint32_t>(sum >> 32);
+#ifdef DEBUG
+  cout << "key = " << key << ", hash = " << hex << sum << endl;
+#endif
+  return static_cast<uint8_t>((sum >> 63) & 1); // MSB
 }
 
-int read_edges(string filename,
-               vector<pair<pair<int,int>,string>>& edges,
-               unordered_map<string,int>& node_id) {
-  int nverts = 0;
-  int fd, i, j;
+void read_edges(string filename,
+                vector<pair<pair<string,string>,string>>& edges) {
+  int fd;
+  uint32_t i, j;
   struct stat fstatbuf;
   char *data;
   char src_name[NODE_NAME_SIZE];
   char dst_name[NODE_NAME_SIZE];
   char typ_name[NODE_NAME_SIZE];
   unordered_map<string,int>::iterator it;
-
-  if (DEBUG)
-    cout << "Reading edges from: " << filename << endl;
 
   fd = open(filename.c_str(), O_RDONLY);
   fstat(fd, &fstatbuf);
@@ -102,36 +107,44 @@ int read_edges(string filename,
 
     i++; // skip newline
 
-    if (DEBUG)
-      cout << "src: " << src_name
-           << " dest: " << dst_name
-           << " type: " << typ_name << endl;
-
-    string u = string(src_name);
-    string v = string(dst_name);
-    string t = string(typ_name);
-
-    // create a node_id for the source
-    it = node_id.find(u);
-    if (it == node_id.end()) { // unseen node
-      node_id[u] = nverts; // allocate new id
-      nverts++;
+    // convert source, destination and type names to 32-bit strings
+    /*assert(strlen(src_name) > 0);
+    uint32_t k;
+    u32string u32;
+    for (j = 0; j < (strlen(src_name) - 1)/4 + 1; j++) {
+      uint32_t byte = 0;
+      for (k = 0; k < 4 && j * 4 + k < strlen(src_name); k++) {
+        byte |= (src_name[j * 4 + k] << 8 * k);
+      }
+      u32 += byte;
     }
 
-    // create a node_id for the destination
-    it = node_id.find(v);
-    if (it == node_id.end()) { // unseen node
-      node_id[v] = nverts; // allocate new id
-      nverts++;
+    assert(strlen(dst_name) > 0);
+    u32string v32;
+    for (j = 0; j < (strlen(dst_name) - 1)/4 + 1; j++) {
+      uint32_t byte = 0;
+      for (k = 0; k < 4 && j * 4 + k < strlen(dst_name); k++) {
+        byte |= (dst_name[j * 4 + k] << 8 * k);
+      }
+      v32 += byte;
     }
+
+    assert(strlen(typ_name) > 0);
+    u32string t32;
+    for (j = 0; j < (strlen(typ_name) - 1)/4 + 1; j++) {
+      uint32_t byte = 0;
+      for (k = 0; k < 4 && j * 4 + k < strlen(typ_name); k++) {
+        byte |= (typ_name[j * 4 + k] << 8 * k);
+      }
+      t32 += byte;
+    }*/
 
     // add an edge to memory
-    edges.push_back(make_pair(make_pair(node_id[u], node_id[v]), t));
+    edges.push_back(make_pair(make_pair(string(src_name), string(dst_name)),
+                              string(typ_name)));
   }
 
   close(fd);
-
-  return nverts;
 }
 
 void print_usage() {
@@ -139,9 +152,8 @@ void print_usage() {
 }
 
 int main(int argc, char *argv[]) {
-  unordered_map<string,int> node_id;        // map memory address to an integer
-  vector<pair<pair<int,int>,string>> edges; // edge list
-  vector<vector<pair<string,string>>> G;    // adjacency list w/ edge types
+  vector<pair<pair<string,string>,string>> edges;
+                                            // edge list
   bitset<L> sketch;                         // L-bit sketch (initially 0)
   vector<int> projection(L);                // projection vector
   vector<vector<uint64_t>> H(L);            // Universal family H, contains
@@ -164,34 +176,33 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (DEBUG) {
-    cout << "Random numbers:\n";
+#ifdef DEBUG
+    cout << "64-bit random numbers:\n";
     for (int i = 0; i < L; i++) {
       for (int j = 0; j < SMAX + 2; j++) {
         cout << H[i][j] << " ";
       }
       cout << endl;
     }
-  }
+#endif
 
   // read edges into memory
-  read_edges(argv[1], edges, node_id);
+#ifdef DEBUG
+    cout << "Reading edges from: " << argv[1] << endl;
+#endif
+  read_edges(argv[1], edges);
 
-  if (DEBUG) {
-    for (unordered_map<string,int>::iterator it = node_id.begin();
-         it != node_id.end();
-         it++) {
-      cout << "Key: " << it->first << " Value: " << it->second << endl;
-    }
-
+#ifdef DEBUG
     for (uint32_t i = 0; i < edges.size(); i++) {
-      cout << edges[i].first.first << " " << edges[i].first.second
-           << " " << edges[i].second << endl;
+      cout << edges[i].first.first
+           << " hash: " << static_cast<int>(hashmulti(edges[i].first.first, H[0]))
+           << " " << edges[i].first.second
+           << " hash: " << static_cast<int>(hashmulti(edges[i].first.second, H[0]))
+           << " " << edges[i].second
+           << " hash: " << static_cast<int>(hashmulti(edges[i].second, H[0]))
+           << endl;
     }
-  }
-
-  // allocate adjacency list
-  G = vector<vector<pair<string,string>>>(node_id.size());
+#endif
 
   return 0;
 }

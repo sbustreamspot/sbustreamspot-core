@@ -1,6 +1,7 @@
 # Custom
 swoosh
 *.swp
+*.swo
 
 # Compiled Object files
 *.slo
