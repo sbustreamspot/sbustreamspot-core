@@ -7,6 +7,7 @@
 #include <random>
 #include <string>
 #include <sys/stat.h>
+#include <tuple>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
@@ -15,9 +16,8 @@
 #define NDEBUG            0
 #endif
 
-#define NODE_NAME_SIZE    20
-#define TYPE_NAME_SIZE    1
-#define DELIMITER         ' '
+#define BUF_SIZE          50
+#define DELIMITER         '\t'
 #define L                 100
 #define SMAX              32
 #define SEED              23
@@ -48,22 +48,17 @@ uint8_t hashmulti(const string& key, vector<uint64_t>& randbits) {
 }
 
 void read_edges(string filename,
-                vector<pair<pair<string,string>,string>>& edges) {
-  int fd;
-  uint32_t i, j;
+                vector<tuple<uint32_t,string,
+                             uint32_t,string,
+                             string,uint64_t,uint32_t>>& edges) {
+  // get file size
   struct stat fstatbuf;
-  char *data;
-  char src_name[NODE_NAME_SIZE];
-  char dst_name[NODE_NAME_SIZE];
-  char typ_name[NODE_NAME_SIZE];
-  unordered_map<string,int>::iterator it;
-
-  fd = open(filename.c_str(), O_RDONLY);
+  int fd = open(filename.c_str(), O_RDONLY);
   fstat(fd, &fstatbuf);
 
   // memory map the file
-  data = (char*) mmap(NULL, fstatbuf.st_size, PROT_READ, MAP_PRIVATE|MAP_POPULATE,
-                      fd, 0);
+  char *data = (char*) mmap(NULL, fstatbuf.st_size, PROT_READ,
+                            MAP_PRIVATE|MAP_POPULATE, fd, 0);
   madvise(data, fstatbuf.st_size, MADV_SEQUENTIAL);
 
   if (data < 0) { // mmap failed
@@ -72,76 +67,74 @@ void read_edges(string filename,
   }
 
   // read edges from the file
-  i = 0;
+  uint32_t i = 0, j = 0;
   while (i < fstatbuf.st_size) {
-    // field 1: source name
-    j = 0;
-    while (data[i] != DELIMITER) {
-      src_name[j] = data[i];
-      i++;
-      j++;
+    // field 1: source id
+    uint32_t src_id = data[i] - '0';
+    while (data[++i] != DELIMITER) {
+      src_id = src_id * 10 + (data[i] - '0');
     }
-    src_name[j] = '\0';
 
     i++; // skip delimiter
 
-    // field 2: destination name
+    // field 2: source type
+    char src_type[BUF_SIZE] = {0};
     j = 0;
     while (data[i] != DELIMITER) {
-      dst_name[j] = data[i];
-      i++;
-      j++;
+      src_type[j++] = data[i++];
     }
-    dst_name[j] = '\0';
+    src_type[j] = '\0';
 
     i++; // skip delimiter
 
-    // field 3: type name
-    j = 0;
-    while (data[i] != '\n') {
-      typ_name[j] = data[i];
-      i++;
-      j++;
+    // field 3: dest id
+    uint32_t dst_id = data[i] - '0';
+    while (data[++i] != DELIMITER) {
+      dst_id = dst_id * 10 + (data[i] - '0');
     }
-    typ_name[j] = '\0';
+
+    i++; // skip delimiter
+
+    // field 4: dest type
+    char dst_type[BUF_SIZE] = {0};
+    j = 0;
+    while (data[i] != DELIMITER) {
+      dst_type[j++] = data[i++];
+    }
+    dst_type[j] = '\0';
+
+    i++; // skip delimiter
+
+    // field 5: edge type
+    char e_type[BUF_SIZE] = {0};
+    j = 0;
+    while (data[i] != DELIMITER) {
+      e_type[j++] = data[i++];
+    }
+    e_type[j] = '\0';
+
+    i++; // skip delimiter
+
+    // field 6: timestamp
+    uint64_t ts = data[i] - '0';
+    while (data[++i] != DELIMITER) {
+      ts = ts * 10 + (data[i] - '0');
+    }
+
+    i++; // skip delimiter
+
+    // field 7: graph id
+    uint32_t graph_id = data[i] - '0';
+    while (data[++i] != '\n') {
+      graph_id = graph_id * 10 + (data[i] - '0');
+    }
 
     i++; // skip newline
 
-    // convert source, destination and type names to 32-bit strings
-    /*assert(strlen(src_name) > 0);
-    uint32_t k;
-    u32string u32;
-    for (j = 0; j < (strlen(src_name) - 1)/4 + 1; j++) {
-      uint32_t byte = 0;
-      for (k = 0; k < 4 && j * 4 + k < strlen(src_name); k++) {
-        byte |= (src_name[j * 4 + k] << 8 * k);
-      }
-      u32 += byte;
-    }
-
-    assert(strlen(dst_name) > 0);
-    u32string v32;
-    for (j = 0; j < (strlen(dst_name) - 1)/4 + 1; j++) {
-      uint32_t byte = 0;
-      for (k = 0; k < 4 && j * 4 + k < strlen(dst_name); k++) {
-        byte |= (dst_name[j * 4 + k] << 8 * k);
-      }
-      v32 += byte;
-    }
-
-    assert(strlen(typ_name) > 0);
-    u32string t32;
-    for (j = 0; j < (strlen(typ_name) - 1)/4 + 1; j++) {
-      uint32_t byte = 0;
-      for (k = 0; k < 4 && j * 4 + k < strlen(typ_name); k++) {
-        byte |= (typ_name[j * 4 + k] << 8 * k);
-      }
-      t32 += byte;
-    }*/
-
     // add an edge to memory
-    edges.push_back(make_pair(make_pair(string(src_name), string(dst_name)),
-                              string(typ_name)));
+    edges.push_back(make_tuple(src_id, string(src_type),
+                               dst_id, string(dst_type),
+                               string(e_type), ts, graph_id));
   }
 
   close(fd);
@@ -152,14 +145,15 @@ void print_usage() {
 }
 
 int main(int argc, char *argv[]) {
-  vector<pair<pair<string,string>,string>> edges;
-                                            // edge list
-  bitset<L> sketch;                         // L-bit sketch (initially 0)
-  vector<int> projection(L);                // projection vector
-  vector<vector<uint64_t>> H(L);            // Universal family H, contains
-                                            // L hash functions, each represented by
-                                            // SMAX+2 64-bit random integers
-  mt19937_64 prng(SEED);                    // Mersenne Twister 64-bit PRNG
+  vector<tuple<uint32_t,string,uint32_t,string,
+               string,uint64_t,uint32_t>> edges; // edge list
+  bitset<L> sketch;                              // L-bit sketch (initially 0)
+  vector<int> projection(L);                     // projection vector
+  vector<vector<uint64_t>> H(L);                 // Universal family H, contains
+                                                 // L hash functions, each
+                                                 // represented by SMAX+2 64-bit
+                                                 // random integers
+  mt19937_64 prng(SEED);                         // Mersenne Twister 64-bit PRNG
 
   if (argc != 2) {
     print_usage();
@@ -194,13 +188,11 @@ int main(int argc, char *argv[]) {
 
 #ifdef DEBUG
     for (uint32_t i = 0; i < edges.size(); i++) {
-      cout << edges[i].first.first
-           << " hash: " << static_cast<int>(hashmulti(edges[i].first.first, H[0]))
-           << " " << edges[i].first.second
-           << " hash: " << static_cast<int>(hashmulti(edges[i].first.second, H[0]))
-           << " " << edges[i].second
-           << " hash: " << static_cast<int>(hashmulti(edges[i].second, H[0]))
-           << endl;
+      cout << "Edge " << i << ": (";
+      cout << get<0>(edges[i]) << " " << get<1>(edges[i]) << " ";
+      cout << get<2>(edges[i]) << " " << get<3>(edges[i]) << " ";
+      cout << get<4>(edges[i]) << " " << get<5>(edges[i]) << " ";
+      cout << get<6>(edges[i]) << ")" << endl;
     }
 #endif
 
