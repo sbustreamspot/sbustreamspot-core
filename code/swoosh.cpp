@@ -1,5 +1,6 @@
 #include <bitset>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <sys/mman.h>
 #include <functional>
@@ -42,7 +43,7 @@ typedef unordered_map<string,uint32_t> shingle_vector;
 
 /* Combination hash from Boost */
 template <class T>
-inline void hash_combine(size_t & seed, const T& v)
+inline void hash_combine(size_t& seed, const T& v)
 {
     hash<T> hasher;
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -52,7 +53,7 @@ namespace std
 {
   template<typename S, typename T> struct hash<pair<S, T>>
   {
-    inline size_t operator()(const pair<S, T> & v) const
+    inline size_t operator()(const pair<S, T>& v) const
     {
       size_t seed = 0;
       ::hash_combine(seed, v.first);
@@ -177,15 +178,21 @@ void read_edges(string filename, vector<edge>& edges) {
 }
 
 void update_graphs(edge& e, vector<graph>& graphs) {
-  uint32_t src_id = get<F_S>(e);
-  string src_type = get<F_STYPE>(e);
-  uint32_t gid = get<F_GID>(e);
+  uint32_t& src_id = get<F_S>(e);
+  string& src_type = get<F_STYPE>(e);
+  uint32_t& dst_id = get<F_D>(e);
+  string& dst_type = get<F_DTYPE>(e);
+  uint32_t& gid = get<F_GID>(e);
 
   if (gid + 1 > graphs.size()) { // allocate a new graph
     graphs.resize(gid + 1);
   }
 
+  // append edge to the edge list for the source
   graphs[gid][make_pair(src_id, src_type)].push_back(e);
+
+  // add an empty edge list for the destination
+  graphs[gid].insert(make_pair(make_pair(dst_id, dst_type), vector<edge>()));
 }
 
 void print_usage() {
@@ -201,9 +208,9 @@ void print_edge(edge& e) {
 }
 
 void print_graph(graph& g) {
-  for (auto kv : g) {
+  for (auto& kv : g) {
     cout << "(" << kv.first.first << " " << kv.first.second << ")\n";
-    for (auto e : kv.second) {
+    for (auto& e : kv.second) {
       cout << "\t";
       print_edge(e);
       cout << "\n";
@@ -212,7 +219,7 @@ void print_graph(graph& g) {
 }
 
 void construct_shingle_vector(shingle_vector& sv, graph& g) {
-  for (auto kv : g) {
+  for (auto& kv : g) {
     string shingle;
 
     // OkBFT from (src_id,type) = kv.first to construct shingle
@@ -226,9 +233,10 @@ void construct_shingle_vector(shingle_vector& sv, graph& g) {
     d[kv.first.first] = 0;
 
     while (!q.empty()) {
-      uint32_t uid;
-      string utype, etype;
-      tie(uid, utype, etype) = q.front();
+      tuple<uint32_t,string,string>& node = q.front();
+      uint32_t& uid = get<0>(node);
+      string& utype = get<1>(node);
+      string& etype = get<2>(node);
       q.pop();
 
 #ifdef DEBUG
@@ -245,10 +253,10 @@ void construct_shingle_vector(shingle_vector& sv, graph& g) {
       }
 
       // outgoing edges are already sorted by timestamp
-      for (auto e : g[make_pair(uid, utype)]) {
-        uint32_t vid = get<F_D>(e);
-        string vtype = get<F_DTYPE>(e);
-        string vetype = get<F_ETYPE>(e);
+      for (auto& e : g[make_pair(uid, utype)]) {
+        uint32_t& vid = get<F_D>(e);
+        string& vtype = get<F_DTYPE>(e);
+        string& vetype = get<F_ETYPE>(e);
 
         d[vid] = d[uid] + 1;
         q.push(make_tuple(vid, vtype, vetype));
@@ -257,6 +265,28 @@ void construct_shingle_vector(shingle_vector& sv, graph& g) {
 
     sv[shingle]++; // increment shingle count
   }
+}
+
+double cosine_similarity(shingle_vector& sv1, shingle_vector& sv2) {
+  double dot_product = 0.0, magnitude1 = 0.0, magnitude2 = 0.0;
+
+  for (auto& kv : sv1) {
+    magnitude1 += kv.second * kv.second;
+  }
+  magnitude1 = sqrt(magnitude1);
+  
+  for (auto& kv : sv2) {
+    magnitude2 += kv.second * kv.second;
+  }
+  magnitude2 = sqrt(magnitude2);
+
+  for (auto& kv : sv1) {
+    uint32_t count1 = kv.second;
+    uint32_t count2 = sv2.find(kv.first) == sv2.end() ? 0 : sv2[kv.first];
+    dot_product += count1 * count2;
+  }
+
+  return dot_product / (magnitude1 * magnitude2);
 }
 
 int main(int argc, char *argv[]) {
@@ -310,7 +340,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   // main per-edge stream loop
-  for (auto e : edges) {
+  for (auto& e : edges) {
     update_graphs(e, graphs);
     // TODO: Update sketches/clustering too
   }
@@ -330,11 +360,21 @@ int main(int argc, char *argv[]) {
     cout << "Graph " << i << ":\n";
     print_graph(graphs[i]);
     cout << "Shingles:\n";
-    for (auto e : shingle_vectors[i]) {
+    for (auto& e : shingle_vectors[i]) {
       cout << "\t" << e.first << " => " << e.second << endl;
     }
   }
 #endif
+
+  // cosine similarity between pairs of graphs
+  for (uint32_t i = 0; i < graphs.size(); i++) {
+    for (uint32_t j = 0; j < graphs.size(); j++) {
+      double sim = cosine_similarity(shingle_vectors[i], shingle_vectors[j]);
+#ifdef DEBUG
+      cout << "sim(" << i << ", " << j << ") = " << sim << endl;
+#endif
+    }
+  }
 
   return 0;
 }
