@@ -5,19 +5,15 @@
 
 ```
 cd code
-make
+make clean debug
 ./swoosh
 ```
 
+For a performance-optimized binary: `make clean performance`
+
 ## Input
 
-Edge list of the format:
-
-```
-n # number of edges
-u v t # source (string) TAB destination (string) TAB type (string)
-...
-```
+Edges are assumed to be ordered by timestamp.
 
 ## Contact
 
