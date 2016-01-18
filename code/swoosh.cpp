@@ -2,8 +2,10 @@
 #include <cassert>
 #include <cstdio>
 #include <sys/mman.h>
+#include <functional>
 #include <fcntl.h>
 #include <iostream>
+#include <queue>
 #include <random>
 #include <string>
 #include <sys/stat.h>
@@ -16,13 +18,50 @@
 #define NDEBUG            0
 #endif
 
+#define K                 1
 #define BUF_SIZE          50
 #define DELIMITER         '\t'
 #define L                 100
 #define SMAX              32
 #define SEED              23
 
+// edge field indices
+#define F_S               0           // source node id
+#define F_STYPE           1           // source node type
+#define F_D               2           // destination node id
+#define F_DTYPE           3           // destination node type
+#define F_ETYPE           4           // edge type
+#define F_T               5           // timestamp
+#define F_GID             6           // graph id (tag)
+
 using namespace std;
+
+typedef tuple<uint32_t,string,uint32_t,string,string,uint64_t,uint32_t> edge;
+typedef unordered_map<pair<uint32_t,string>,vector<edge>> graph;
+typedef unordered_map<string,uint32_t> shingle_vector;
+
+/* Combination hash from Boost */
+template <class T>
+inline void hash_combine(size_t & seed, const T& v)
+{
+    hash<T> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+namespace std
+{
+  template<typename S, typename T> struct hash<pair<S, T>>
+  {
+    inline size_t operator()(const pair<S, T> & v) const
+    {
+      size_t seed = 0;
+      ::hash_combine(seed, v.first);
+      ::hash_combine(seed, v.second);
+      return seed;
+    }
+  };
+}
+/* End combination hash from Boost */
 
 void panic(string message) {
   cout << message << endl;
@@ -47,10 +86,7 @@ uint8_t hashmulti(const string& key, vector<uint64_t>& randbits) {
   return static_cast<uint8_t>((sum >> 63) & 1); // MSB
 }
 
-void read_edges(string filename,
-                vector<tuple<uint32_t,string,
-                             uint32_t,string,
-                             string,uint64_t,uint32_t>>& edges) {
+void read_edges(string filename, vector<edge>& edges) {
   // get file size
   struct stat fstatbuf;
   int fd = open(filename.c_str(), O_RDONLY);
@@ -140,13 +176,92 @@ void read_edges(string filename,
   close(fd);
 }
 
+void update_graphs(edge& e, vector<graph>& graphs) {
+  uint32_t src_id = get<F_S>(e);
+  string src_type = get<F_STYPE>(e);
+  uint32_t gid = get<F_GID>(e);
+
+  if (gid + 1 > graphs.size()) { // allocate a new graph
+    graphs.resize(gid + 1);
+  }
+
+  graphs[gid][make_pair(src_id, src_type)].push_back(e);
+}
+
 void print_usage() {
   cout << "USAGE: ./swoosh <GRAPH FILE>\n";
 }
 
+void print_edge(edge& e) {
+  cout << "(";
+  cout << get<F_S>(e) << " " << get<F_STYPE>(e) << " ";
+  cout << get<F_D>(e) << " " << get<F_DTYPE>(e) << " ";
+  cout << get<F_ETYPE>(e) << " " << get<F_T>(e) << " ";
+  cout << get<F_GID>(e) << ")";
+}
+
+void print_graph(graph& g) {
+  for (auto kv : g) {
+    cout << "(" << kv.first.first << " " << kv.first.second << ")\n";
+    for (auto e : kv.second) {
+      cout << "\t";
+      print_edge(e);
+      cout << "\n";
+    }
+  }
+}
+
+void construct_shingle_vector(shingle_vector& sv, graph& g) {
+  for (auto kv : g) {
+    string shingle;
+
+    // OkBFT from (src_id,type) = kv.first to construct shingle
+#ifdef DEBUG
+    cout << "OkBFT from " << kv.first.first << " (K = " << K << "):\n";
+#endif
+    queue<tuple<uint32_t,string,string>> q; // (nodeid, nodetype, edgetype)
+    unordered_map<uint32_t,uint32_t> d;
+
+    q.push(make_tuple(kv.first.first, kv.first.second, ""));
+    d[kv.first.first] = 0;
+
+    while (!q.empty()) {
+      uint32_t uid;
+      string utype, etype;
+      tie(uid, utype, etype) = q.front();
+      q.pop();
+
+#ifdef DEBUG
+      cout << "\tPopped (" << uid << ", " << utype << ", " << etype << ")\n";
+#endif
+      // use destination and edge types to construct shingle
+      shingle += etype + utype;
+
+      if (d[uid] == K) { // node is K hops away from src_id
+#ifdef DEBUG
+        cout << "Hop limit reached\n";
+#endif
+        continue;        // don't follow its edges
+      }
+
+      // outgoing edges are already sorted by timestamp
+      for (auto e : g[make_pair(uid, utype)]) {
+        uint32_t vid = get<F_D>(e);
+        string vtype = get<F_DTYPE>(e);
+        string vetype = get<F_ETYPE>(e);
+
+        d[vid] = d[uid] + 1;
+        q.push(make_tuple(vid, vtype, vetype));
+      }
+    }
+
+    sv[shingle]++; // increment shingle count
+  }
+}
+
 int main(int argc, char *argv[]) {
-  vector<tuple<uint32_t,string,uint32_t,string,
-               string,uint64_t,uint32_t>> edges; // edge list
+  vector<edge> edges;                            // edge list
+  vector<graph> graphs;                          // graph list
   bitset<L> sketch;                              // L-bit sketch (initially 0)
   vector<int> projection(L);                     // projection vector
   vector<vector<uint64_t>> H(L);                 // Universal family H, contains
@@ -188,12 +303,37 @@ int main(int argc, char *argv[]) {
 
 #ifdef DEBUG
     for (uint32_t i = 0; i < edges.size(); i++) {
-      cout << "Edge " << i << ": (";
-      cout << get<0>(edges[i]) << " " << get<1>(edges[i]) << " ";
-      cout << get<2>(edges[i]) << " " << get<3>(edges[i]) << " ";
-      cout << get<4>(edges[i]) << " " << get<5>(edges[i]) << " ";
-      cout << get<6>(edges[i]) << ")" << endl;
+      cout << "Edge " << i << ": ";
+      print_edge(edges[i]);
+      cout << endl;
     }
+#endif
+
+  // main per-edge stream loop
+  for (auto e : edges) {
+    update_graphs(e, graphs);
+    // TODO: Update sketches/clustering too
+  }
+
+  // FIXME: Static clustering below, should be incremental
+  vector<shingle_vector> shingle_vectors(graphs.size());
+  for (uint32_t i = 0; i < graphs.size(); i++) {
+#ifdef DEBUG
+    cout << "Constructing shingles for graph " << i << endl;
+#endif
+    construct_shingle_vector(shingle_vectors[i], graphs[i]);
+  }
+
+#ifdef DEBUG
+  for (uint32_t i = 0; i < graphs.size(); i++) {
+    cout << endl;
+    cout << "Graph " << i << ":\n";
+    print_graph(graphs[i]);
+    cout << "Shingles:\n";
+    for (auto e : shingle_vectors[i]) {
+      cout << "\t" << e.first << " => " << e.second << endl;
+    }
+  }
 #endif
 
   return 0;
