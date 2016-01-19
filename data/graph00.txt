@@ -1,6 +1,6 @@
-3	process	4	file	execve	1	1
-1	process	2	file	execve	1	2
-3	process	5	file	open	5	1
-1	process	5	file	open	5	2
-2	file	5	file	open	5	2
-5	file	6	file	mmap2	6	1
+3	process	4	file	execve	1	0
+1	process	2	file	execve	1	1
+3	process	5	file	open	5	0
+1	process	5	file	open	5	1
+2	file	5	file	open	5	1
+5	file	6	file	mmap2	6	0

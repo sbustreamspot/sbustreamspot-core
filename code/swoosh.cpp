@@ -21,6 +21,8 @@
 #endif
 
 #define K                 1
+#define B                 10
+#define R                 10          // must be a factor of L
 #define BUF_SIZE          50
 #define DELIMITER         '\t'
 #define L                 100
@@ -314,6 +316,31 @@ double simhash_similarity(bitset<L> sketch1, bitset<L> sketch2) {
   return static_cast<double>((~(sketch1 ^ sketch2)).count()) / L;
 }
 
+void hash_bands(uint32_t gid, bitset<L> sketch,
+                vector<unordered_map<bitset<R>,vector<uint32_t>>>& hash_tables) {
+  // divide L-bit sketch into B R-bit chunks
+  assert(L == B * R);
+
+#ifdef DEBUG
+  cout << "Hashing bands of GID: " << gid << endl;
+  cout << sketch.to_string() << endl;
+#endif
+
+  bitset<L> mask = bitset<L>(string(R, '1')); // R one's
+  for (uint32_t i = 0; i < B; i++) {
+    // get the i'th R-bit band
+    string band_string = (sketch >> (R * i) & mask).to_string();
+    band_string = band_string.substr(band_string.length() - R, R);
+    bitset<R> band(band_string);
+#ifdef DEBUG
+    cout << "\tBand " << i << ": " << band.to_string() << endl;
+#endif
+
+    // hash the band to a bucket in the i'th hash table and insert the gid
+    hash_tables[i][band].push_back(gid);
+  }
+}
+
 int main(int argc, char *argv[]) {
   vector<edge> edges;                            // edge list
   vector<graph> graphs;                          // graph list
@@ -333,6 +360,9 @@ int main(int argc, char *argv[]) {
   vector<shingle_vector> shingle_vectors;        // |S|-element shingle vectors
   unordered_map<string,int> shingle_id;
   unordered_set<string> unique_shingles;
+
+  vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
+                                                 // B hash-tables
 
   if (argc != 2) {
     print_usage();
@@ -472,6 +502,26 @@ int main(int argc, char *argv[]) {
 #endif
     }
   }
+
+  // LSH-banding: assign graphs to hashtable buckets
+  for (uint32_t i = 0; i < graphs.size(); i++) {
+    hash_bands(i, simhash_sketches[i], hash_tables);
+  }
+
+#ifdef DEBUG
+  cout << "Hash tables after hashing bands:\n";
+  for (uint32_t i = 0; i < B; i++) {
+    cout << "\tHash table " << i << ":\n";
+    for (auto kv : hash_tables[i]) {
+      // print graph id's in this bucket
+      cout << "\t";
+      for (uint32_t j = 0; j < kv.second.size(); j++) {
+        cout << j << " ";
+      }
+      cout << endl;
+    }
+  }
+#endif
 
   return 0;
 }
