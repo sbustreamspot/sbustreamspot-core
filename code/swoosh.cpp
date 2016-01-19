@@ -13,6 +13,7 @@
 #include <tuple>
 #include <unistd.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifdef DEBUG
@@ -218,7 +219,8 @@ void print_graph(graph& g) {
   }
 }
 
-void construct_shingle_vector(shingle_vector& sv, graph& g) {
+void construct_shingle_vector(shingle_vector& sv,
+                              unordered_set<string>& unique_shingles, graph& g) {
   for (auto& kv : g) {
     string shingle;
 
@@ -264,6 +266,24 @@ void construct_shingle_vector(shingle_vector& sv, graph& g) {
     }
 
     sv[shingle]++; // increment shingle count
+    unique_shingles.insert(shingle);
+  }
+}
+
+void construct_simhash_sketch(bitset<L>& simhash_sketch,
+                              shingle_vector& sv,
+                              unordered_map<string,int>& shingle_id,
+                              vector<vector<int>>& random_vectors) {
+  for (uint32_t i = 0; i < L; i++) {
+    // compute i'th bit of the sketch
+    vector<int>& rv = random_vectors[i];
+    int dot_product = 0;
+    for (auto kv : sv) {
+      const int& id = shingle_id[kv.first];
+      const int& count = kv.second;
+      dot_product += rv[id] * count;
+    }
+    simhash_sketch[i] = dot_product >= 0 ? 1 : 0;
   }
 }
 
@@ -289,16 +309,30 @@ double cosine_similarity(shingle_vector& sv1, shingle_vector& sv2) {
   return dot_product / (magnitude1 * magnitude2);
 }
 
+double simhash_similarity(bitset<L> sketch1, bitset<L> sketch2) {
+  // XOR = 0 if bits are the same, 1 otherwise
+  return static_cast<double>((~(sketch1 ^ sketch2)).count()) / L;
+}
+
 int main(int argc, char *argv[]) {
   vector<edge> edges;                            // edge list
   vector<graph> graphs;                          // graph list
+
   bitset<L> sketch;                              // L-bit sketch (initially 0)
   vector<int> projection(L);                     // projection vector
   vector<vector<uint64_t>> H(L);                 // Universal family H, contains
                                                  // L hash functions, each
                                                  // represented by SMAX+2 64-bit
                                                  // random integers
+
   mt19937_64 prng(SEED);                         // Mersenne Twister 64-bit PRNG
+  bernoulli_distribution bernoulli(0.5);         // to generate random vectors
+  vector<vector<int>> random_vectors(L);         // |S|-element random vectors
+  vector<bitset<L>> simhash_sketches;
+
+  vector<shingle_vector> shingle_vectors;        // |S|-element shingle vectors
+  unordered_map<string,int> shingle_id;
+  unordered_set<string> unique_shingles;
 
   if (argc != 2) {
     print_usage();
@@ -346,12 +380,14 @@ int main(int argc, char *argv[]) {
   }
 
   // FIXME: Static clustering below, should be incremental
-  vector<shingle_vector> shingle_vectors(graphs.size());
+
+  // allocate shingle vectors
+  shingle_vectors.resize(graphs.size());
   for (uint32_t i = 0; i < graphs.size(); i++) {
 #ifdef DEBUG
     cout << "Constructing shingles for graph " << i << endl;
 #endif
-    construct_shingle_vector(shingle_vectors[i], graphs[i]);
+    construct_shingle_vector(shingle_vectors[i], unique_shingles, graphs[i]);
   }
 
 #ifdef DEBUG
@@ -372,6 +408,67 @@ int main(int argc, char *argv[]) {
       double sim = cosine_similarity(shingle_vectors[i], shingle_vectors[j]);
 #ifdef DEBUG
       cout << "sim(" << i << ", " << j << ") = " << sim << endl;
+#endif
+    }
+  }
+  
+  // allocate shingle id's
+  int current_id = 0;
+  for (string shingle : unique_shingles) {
+    shingle_id[shingle] = current_id;
+    current_id++;
+  }
+
+#ifdef DEBUG
+  cout << "Single ID's\n";
+  for (auto kv : shingle_id) {
+    cout << "\t" << kv.first << " => " << kv.second << endl;
+  }
+#endif
+
+  // allocate L |S|-element {+1,-1} random vectors
+  for (uint32_t i = 0; i < L; i++) {
+    random_vectors[i].resize(unique_shingles.size());
+    for (uint32_t j = 0; j < unique_shingles.size(); j++) {
+      random_vectors[i][j] = 2 * static_cast<int>(bernoulli(prng)) - 1;
+    }
+  }
+
+#ifdef DEBUG
+  cout << "Random vectors:\n";
+  for (uint32_t i = 0; i < L; i++) {
+    cout << "\t";
+    for (int rv_i : random_vectors[i]) {
+      cout << rv_i << " ";
+    }
+    cout << endl;
+  }
+#endif
+
+  // compute SimHash sketches
+  simhash_sketches.resize(graphs.size());
+  for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
+    construct_simhash_sketch(simhash_sketches[i], shingle_vectors[i],
+                             shingle_id, random_vectors);
+  }
+
+#ifdef DEBUG
+  cout << "SimHash sketches:\n";
+  for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
+    cout << "\t";
+    for (uint32_t j = 0; j < L; j++) {
+      cout << simhash_sketches[i][j] << " ";
+    }
+    cout << endl;
+  }
+#endif
+
+  // SimHash similarity between pairs of graphs
+  for (uint32_t i = 0; i < graphs.size(); i++) {
+    for (uint32_t j = 0; j < graphs.size(); j++) {
+      double sim = simhash_similarity(simhash_sketches[i], simhash_sketches[j]);
+#ifdef DEBUG
+      cout << "simash sim(" << i << ", " << j << ") = " << sim << endl;
 #endif
     }
   }
