@@ -105,6 +105,14 @@ void read_edges(string filename, vector<edge>& edges) {
   }
 
   close(fd);
+
+#ifdef DEBUG
+    for (uint32_t i = 0; i < edges.size(); i++) {
+      cout << "Edge " << i << ": ";
+      print_edge(edges[i]);
+      cout << endl;
+    }
+#endif
 }
 
 }
