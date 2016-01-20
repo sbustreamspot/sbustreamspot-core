@@ -1,5 +1,5 @@
-#ifndef SWOOSH_SKETCH_H_
-#define SWOOSH_SKETCH_H_
+#ifndef SWOOSH_SIMHASH_H_
+#define SWOOSH_SIMHASH_H_
 
 #include <bitset>
 #include "graph.h"

@@ -29,5 +29,4 @@ double simhash_similarity(bitset<L> sketch1, bitset<L> sketch2) {
   return static_cast<double>((~(sketch1 ^ sketch2)).count()) / L;
 }
 
-
 }
