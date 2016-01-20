@@ -1,20 +1,18 @@
 # SWOOSH
 *Streaming netWOrk anOmalies by Shingling and Hashing*
 
-## Execution
+## Quickstart
 
 ```
+git clone https://github.com/emaadmanzoor/swoosh.git
 cd code
 make clean debug
-./swoosh
+./swoosh ../data/graph00.txt
 ```
 
 For a performance-optimized binary: `make clean performance`
 
-## Input
-
-Edges are assumed to be ordered by timestamp.
-
 ## Contact
 
-emanzoor@cs.stonybrook.edu
+   * emanzoor@cs.stonybrook.edu
+   * leman@cs.stonybrook.edu
