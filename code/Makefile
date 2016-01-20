@@ -1,6 +1,6 @@
 CC=g++
 CFLAGS=-Wall --std=c++11
-SOURCES := swoosh.cpp
+SOURCES := $(wildcard *.cpp)
 OBJS := $(SOURCES:.cpp=.o)
 
 .PHONY: clean
@@ -11,7 +11,7 @@ optimized: swoosh
 debug: CFLAGS += -DDEBUG -g
 debug: swoosh
 
-swoosh: swoosh.o
+swoosh: $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 .cpp.o:
