@@ -9,7 +9,7 @@
 
 namespace std {
 
-void hash_bands(uint32_t gid, bitset<L> sketch,
+void hash_bands(uint32_t gid, bitset<L>& sketch,
                 vector<unordered_map<bitset<R>,vector<uint32_t>>>& hash_tables);
 
 }

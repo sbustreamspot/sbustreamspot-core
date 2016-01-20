@@ -9,14 +9,13 @@
 
 namespace std {
 
-void hash_bands(uint32_t gid, bitset<L> sketch,
+void hash_bands(uint32_t gid, bitset<L>& sketch,
                 vector<unordered_map<bitset<R>,vector<uint32_t>>>& hash_tables) {
   // divide L-bit sketch into B R-bit chunks
   assert(L == B * R);
 
 #ifdef DEBUG
   cout << "Hashing bands of GID: " << gid << endl;
-  cout << sketch.to_string() << endl;
 #endif
 
   bitset<L> mask = bitset<L>(string(R, '1')); // R one's

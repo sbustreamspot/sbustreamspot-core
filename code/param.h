@@ -6,8 +6,8 @@
 #endif
 
 #define K                 1
-#define B                 10
-#define R                 10
+#define B                 20
+#define R                 5
 #define BUF_SIZE          50
 #define DELIMITER         '\t'
 #define L                 100       // must be = B * R

@@ -152,11 +152,7 @@ int main(int argc, char *argv[]) {
 #ifdef DEBUG
   cout << "SimHash sketches:\n";
   for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
-    cout << "\t";
-    for (uint32_t j = 0; j < L; j++) {
-      cout << simhash_sketches[i][j] << " ";
-    }
-    cout << endl;
+    cout << "\t" << simhash_sketches[i].to_string() << endl;
   }
 #endif
 
@@ -181,9 +177,9 @@ int main(int argc, char *argv[]) {
     cout << "\tHash table " << i << ":\n";
     for (auto kv : hash_tables[i]) {
       // print graph id's in this bucket
-      cout << "\t";
+      cout << "\t\tBucket => ";
       for (uint32_t j = 0; j < kv.second.size(); j++) {
-        cout << j << " ";
+        cout << kv.second[j] << " ";
       }
       cout << endl;
     }
