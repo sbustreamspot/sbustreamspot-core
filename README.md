@@ -10,7 +10,7 @@ make clean debug
 ./swoosh ../data/graph00.txt
 ```
 
-For a performance-optimized binary: `make clean performance`
+For a performance-optimized binary: `make clean optimized`
 
 ## Contact
 
