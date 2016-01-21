@@ -12,29 +12,34 @@
 namespace std {
 
 void update_graphs(edge& e, vector<graph>& graphs) {
-  uint32_t& src_id = get<F_S>(e);
-  string& src_type = get<F_STYPE>(e);
-  uint32_t& dst_id = get<F_D>(e);
-  string& dst_type = get<F_DTYPE>(e);
-  uint32_t& gid = get<F_GID>(e);
+  auto& src_id = get<F_S>(e);
+  auto& src_type = get<F_STYPE>(e);
+  auto& dst_id = get<F_D>(e);
+  auto& dst_type = get<F_DTYPE>(e);
+  auto& e_type = get<F_ETYPE>(e);
+  auto& gid = get<F_GID>(e);
 
   if (gid + 1 > graphs.size()) { // allocate a new graph
     graphs.resize(gid + 1);
   }
 
   // append edge to the edge list for the source
-  graphs[gid][make_pair(src_id, src_type)].push_back(e);
+  graphs[gid][make_pair(src_id,
+                        src_type)].push_back(make_tuple(dst_id,
+                                                        dst_type,
+                                                        e_type));
 
   // add an empty edge list for the destination
-  graphs[gid].insert(make_pair(make_pair(dst_id, dst_type), vector<edge>()));
+  graphs[gid].insert(make_pair(make_pair(dst_id, dst_type),
+                               vector<tuple<uint32_t,char,char>>()));
 }
 
-void print_edge(edge& e) {
+void print_edge(tuple<uint32_t,char,char> e) {
   cout << "(";
-  cout << get<F_S>(e) << " " << get<F_STYPE>(e) << " ";
-  cout << get<F_D>(e) << " " << get<F_DTYPE>(e) << " ";
-  cout << get<F_ETYPE>(e) << " " << get<F_T>(e) << " ";
-  cout << get<F_GID>(e) << ")";
+  cout << get<0>(e) << " ";
+  cout << get<1>(e) << " ";
+  cout << get<2>(e);
+  cout << ")";
 }
 
 void print_graph(graph& g) {
@@ -49,7 +54,8 @@ void print_graph(graph& g) {
 }
 
 void construct_shingle_vector(shingle_vector& sv,
-                              unordered_set<string>& unique_shingles, graph& g) {
+                              unordered_set<string>& unique_shingles,
+                              graph& g) {
   for (auto& kv : g) {
     string shingle;
 
@@ -57,24 +63,25 @@ void construct_shingle_vector(shingle_vector& sv,
 #ifdef DEBUG
     cout << "OkBFT from " << kv.first.first << " (K = " << K << "):\n";
 #endif
-    queue<tuple<uint32_t,string,string>> q; // (nodeid, nodetype, edgetype)
+    queue<tuple<uint32_t,char,char>> q; // (nodeid, nodetype, edgetype)
     unordered_map<uint32_t,uint32_t> d;
 
-    q.push(make_tuple(kv.first.first, kv.first.second, ""));
+    q.push(make_tuple(kv.first.first, kv.first.second, ' '));
     d[kv.first.first] = 0;
 
     while (!q.empty()) {
-      tuple<uint32_t,string,string>& node = q.front();
-      uint32_t& uid = get<0>(node);
-      string& utype = get<1>(node);
-      string& etype = get<2>(node);
+      auto& node = q.front();
+      auto& uid = get<0>(node);
+      auto& utype = get<1>(node);
+      auto& etype = get<2>(node);
       q.pop();
 
 #ifdef DEBUG
       cout << "\tPopped (" << uid << ", " << utype << ", " << etype << ")\n";
 #endif
       // use destination and edge types to construct shingle
-      shingle += etype + utype;
+      shingle += etype;
+      shingle += utype;
 
       if (d[uid] == K) { // node is K hops away from src_id
 #ifdef DEBUG
@@ -85,9 +92,9 @@ void construct_shingle_vector(shingle_vector& sv,
 
       // outgoing edges are already sorted by timestamp
       for (auto& e : g[make_pair(uid, utype)]) {
-        uint32_t& vid = get<F_D>(e);
-        string& vtype = get<F_DTYPE>(e);
-        string& vetype = get<F_ETYPE>(e);
+        auto& vid = get<0>(e);
+        auto& vtype = get<1>(e);
+        auto& vetype = get<2>(e);
 
         d[vid] = d[uid] + 1;
         q.push(make_tuple(vid, vtype, vetype));

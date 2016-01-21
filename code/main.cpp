@@ -41,7 +41,7 @@ void print_lsh_clusters(vector<bitset<L>>& simhash_sketches,
                             hash_tables);
 
 void print_usage() {
-  cout << "USAGE: ./swoosh <GRAPH FILE>\n";
+  cout << "USAGE: ./swoosh <GRAPH FILE> <#EDGES>\n";
 }
 
 int main(int argc, char *argv[]) {
@@ -67,14 +67,17 @@ int main(int argc, char *argv[]) {
   vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
                                                  // B hash-tables
 
-  if (argc != 2) {
+  if (argc != 3) {
     print_usage();
     return -1;
   }
 
-  allocate_random_bits(H, prng);
+  edges.resize(atoi(argv[2]));
+
+  //allocate_random_bits(H, prng);
   read_edges(argv[1], edges);
 
+  cout << "Constructing graphs:" << endl;
   for (auto& e : edges) {
     update_graphs(e, graphs); // TODO: Update sketches/clustering too
   }
@@ -143,9 +146,7 @@ void compute_cosine_similarities(vector<shingle_vector>& shingle_vectors) {
   for (uint32_t i = 0; i < shingle_vectors.size(); i++) {
     for (uint32_t j = 0; j < shingle_vectors.size(); j++) {
       double sim = cosine_similarity(shingle_vectors[i], shingle_vectors[j]);
-#ifdef DEBUG
-      cout << "sim(" << i << ", " << j << ") = " << sim << endl;
-#endif
+      cout << "cosim(" << i << ", " << j << ") = " << sim << endl;
     }
   }
 }
@@ -215,9 +216,7 @@ void compute_simhash_similarities(vector<bitset<L>>& simhash_sketches) {
   for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
     for (uint32_t j = 0; j < simhash_sketches.size(); j++) {
       double sim = simhash_similarity(simhash_sketches[i], simhash_sketches[j]);
-#ifdef DEBUG
       cout << "simash sim(" << i << ", " << j << ") = " << sim << endl;
-#endif
     }
   }
 }
@@ -289,13 +288,11 @@ void print_lsh_clusters(vector<bitset<L>>& simhash_sketches,
       }
     }
 
-#ifdef DEBUG
     cout << "\tCluster: {";
     for (auto& e : cluster) {
       cout << " " << e;
     }
     cout << " } Size: " << cluster.size() << endl;
-#endif
 
     for (auto& e : cluster) {
       graphs.erase(e);
