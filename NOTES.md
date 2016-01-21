@@ -1,5 +1,9 @@
 # Performance Notes
 
+## Full Processng
+
+   * 136M lines: 2m
+
 ## File Reading
 
    * 1M lines: 0.3s

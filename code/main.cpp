@@ -61,29 +61,39 @@ int main(int argc, char *argv[]) {
   vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
                                                  // B hash-tables
 
-  if (argc != 3) {
+  if (argc != 2) {
     print_usage();
     return -1;
   }
 
-  edges.resize(atoi(argv[2]));
-
   //allocate_random_bits(H, prng);
-  read_edges(argv[1], edges);
+  uint32_t num_graphs = read_edges(argv[1], edges);
 
-  cout << "Constructing graphs:" << endl;
+  cout << "Constructing " << num_graphs << " graphs:" << endl;
+  graphs.resize(num_graphs);
   for (auto& e : edges) {
     update_graphs(e, graphs); // TODO: Update sketches/clustering too
   }
 
+  cout << "Constructing shingle vectors:" << endl;
   construct_shingle_vectors(shingle_vectors, shingle_id, graphs);
+
+  cout << "Computing pairwise cosine similarity:" << endl;
   compute_cosine_similarities(shingle_vectors);
+
+  cout << "Constructing Simhash sketches:" << endl;
   construct_random_vectors(random_vectors, shingle_vectors[0].size(),
                            bernoulli, prng);
   construct_simhash_sketches(shingle_vectors, random_vectors,
                              simhash_sketches);
+
+  cout << "Computing pairwise SimHash similarity:" << endl;
   compute_simhash_similarities(simhash_sketches);
+
+  cout << "LSH banding:" << endl;
   perform_lsh_banding(simhash_sketches, hash_tables);
+
+  cout << "Print LSH clusters:" << endl;
   print_lsh_clusters(simhash_sketches, hash_tables);
 
   return 0;

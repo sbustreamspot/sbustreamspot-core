@@ -19,10 +19,6 @@ void update_graphs(edge& e, vector<graph>& graphs) {
   auto& e_type = get<F_ETYPE>(e);
   auto& gid = get<F_GID>(e);
 
-  if (gid + 1 > graphs.size()) { // allocate a new graph
-    graphs.resize(gid + 1);
-  }
-
   // append edge to the edge list for the source
   graphs[gid][make_pair(src_id,
                         src_type)].push_back(make_tuple(dst_id,
@@ -62,10 +58,13 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
 
   // construct a temporary shingle vector for each graph
   for (uint32_t i = 0; i < graphs.size(); i++) {
+    //cout << "\tConstructing shingles for graph: " << i << endl;
     for (auto& kv : graphs[i]) {
       // OkBFT from (src_id,type) = kv.first to construct shingle
 #ifdef VERBOSE
-      cout << "OkBFT from " << kv.first.first << " (K = " << K << "):\n";
+      cout << "OkBFT from " << kv.first.first << " " << kv.first.second;
+      cout << " (K = " << K << ")";
+      cout << " fanout = " << kv.second.size() << endl;
 #endif
 
       string shingle; // shingle from this source node
@@ -99,11 +98,8 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
         // outgoing edges are already sorted by timestamp
         for (auto& e : graphs[i][make_pair(uid, utype)]) {
           auto& vid = get<0>(e);
-          auto& vtype = get<1>(e);
-          auto& vetype = get<2>(e);
-
           d[vid] = d[uid] + 1;
-          q.push(make_tuple(vid, vtype, vetype));
+          q.push(e);
         }
       }
 

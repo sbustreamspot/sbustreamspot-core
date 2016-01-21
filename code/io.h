@@ -7,7 +7,7 @@
 
 namespace std {
 
-void read_edges(string filename, vector<edge>& edges);
+uint32_t read_edges(string filename, vector<edge>& edges);
 
 }
 

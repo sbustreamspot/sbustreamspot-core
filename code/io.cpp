@@ -12,7 +12,7 @@
 
 namespace std {
 
-void read_edges(string filename, vector<edge>& edges) {
+uint32_t read_edges(string filename, vector<edge>& edges) {
   // read edges into memory
   cout << "Reading edges from: " << filename << endl;
 
@@ -34,6 +34,7 @@ void read_edges(string filename, vector<edge>& edges) {
   // read edges from the file
   uint32_t i = 0;
   uint32_t line = 0;
+  uint32_t max_gid = 0;
   char src_type, dst_type, e_type;
   while (i < fstatbuf.st_size) {
     // field 1: source id
@@ -69,12 +70,16 @@ void read_edges(string filename, vector<edge>& edges) {
       graph_id = graph_id * 10 + (data[i] - '0');
     }
 
+    if (graph_id > max_gid) {
+      max_gid = graph_id;
+    }
+
     i++; // skip newline
 
     // add an edge to memory
-    edges[line] = make_tuple(src_id, src_type,
-                             dst_id, dst_type,
-                             e_type, graph_id);
+    edges.push_back(make_tuple(src_id, src_type,
+                               dst_id, dst_type,
+                               e_type, graph_id));
     line++;
   }
 
@@ -87,6 +92,8 @@ void read_edges(string filename, vector<edge>& edges) {
       cout << endl;
     }
 #endif
+
+  return max_gid + 1;
 }
 
 }
