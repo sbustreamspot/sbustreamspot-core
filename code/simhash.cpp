@@ -9,17 +9,13 @@ namespace std {
 
 void construct_simhash_sketch(bitset<L>& simhash_sketch,
                               shingle_vector& sv,
-                              unordered_map<string,uint32_t>& shingle_id,
                               vector<vector<int>>& random_vectors) {
   for (uint32_t i = 0; i < L; i++) {
     // compute i'th bit of the sketch
     int dot_product = 0;
-    for (auto& kv : sv) {
-      const int& id = shingle_id[kv.first];
-      const int& count = static_cast<int>(kv.second);
-      dot_product += random_vectors[i][id] * count;
+    for (uint32_t j = 0; j < sv.size(); j++) {
+      dot_product += random_vectors[i][j] * sv[j];
     }
-
     simhash_sketch[i] = dot_product >= 0 ? 1 : 0;
   }
 }

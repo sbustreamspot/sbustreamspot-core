@@ -41,8 +41,9 @@ void get_shared_bucket_graphs(bitset<L>& sketch,
     band_string = band_string.substr(band_string.length() - R, R);
     bitset<R> band(band_string);
 
-    vector<uint32_t>& bucket_graphs = hash_tables[i][band];
-    shared_bucket_graphs.insert(bucket_graphs.begin(), bucket_graphs.end());
+    for (auto& gid : hash_tables[i][band]) {
+      shared_bucket_graphs.insert(gid);
+    }
   }
 }
 
