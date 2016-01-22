@@ -38,6 +38,10 @@ map = {'process': 'a',
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'r') as f:
+        prev_src_id = ""
+        prev_dst_id = ""
+        prev_e_type = ""
+        prev_graph_id = ""
         for line in f:
             fields = [w.strip() for w in line.split(',')]
             fields[0] = str(int(fields[0]) + 1)
@@ -45,5 +49,17 @@ if __name__ == "__main__":
             fields[2] = str(int(fields[2]) + 1)
             fields[3] = map[fields[3]]
             fields[4] = map[fields[4]]
+
+            # avoid parallel edges from block-based file reads
+            if fields[0] == prev_src_id and\
+               fields[2] == prev_dst_id and\
+               fields[4] == prev_e_type and\
+               fields[6] == prev_graph_id:
+                continue
+            prev_src_id = fields[0]
+            prev_dst_id = fields[2]
+            prev_e_type = fields[4]
+            prev_graph_id = fields[6]
+
             del fields[5] # no timestamp
             print '\t'.join(fields)
