@@ -35,7 +35,7 @@ void print_lsh_clusters(vector<bitset<L>>& simhash_sketches,
                             hash_tables);
 
 void print_usage() {
-  cout << "USAGE: ./swoosh <GRAPH FILE> <#EDGES>\n";
+  cout << "USAGE: ./swoosh <edge file> <chunk length>\n";
 }
 
 int main(int argc, char *argv[]) {
@@ -61,13 +61,17 @@ int main(int argc, char *argv[]) {
   vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
                                                  // B hash-tables
 
-  if (argc != 2) {
+  if (argc != 3) {
     print_usage();
     return -1;
   }
 
+  // arguments
+  string edge_file(argv[1]);
+  uint32_t chunk_length = atoi(argv[2]);
+
   //allocate_random_bits(H, prng);
-  uint32_t num_graphs = read_edges(argv[1], edges);
+  uint32_t num_graphs = read_edges(edge_file, edges);
 
   cout << "Constructing " << num_graphs << " graphs:" << endl;
   graphs.resize(num_graphs);
@@ -76,7 +80,8 @@ int main(int argc, char *argv[]) {
   }
 
   cout << "Constructing shingle vectors:" << endl;
-  construct_shingle_vectors(shingle_vectors, shingle_id, graphs);
+  construct_shingle_vectors(shingle_vectors, shingle_id, graphs,
+                            chunk_length);
 
   cout << "Constructing Simhash sketches:" << endl;
   construct_random_vectors(random_vectors, shingle_vectors[0].size(),
@@ -126,11 +131,13 @@ void compute_similarities(vector<shingle_vector>& shingle_vectors,
       double angsim = 1 - acos(cosine)/PI;
       double hashsim = simhash_similarity(simhash_sketches[i], simhash_sketches[j]);
       double diff = abs(angsim - hashsim)/angsim;
+      cout << i << "\t" << j << "\t";
+      cout << cosine;
 #ifdef DEBUG
-      cout << "sim: " << i << " " << j << " ";
-      cout << cosine  << " " << angsim << " " << hashsim;
-      cout << " " << diff << endl;
+      cout << "\t" << angsim << "\t" << hashsim;
+      cout << "\t" << diff;
 #endif
+      cout << endl;
     }
   }
 }

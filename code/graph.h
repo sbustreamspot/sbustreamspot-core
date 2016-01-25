@@ -29,8 +29,9 @@ void print_edge(edge& e);
 void print_graph(graph& g);
 void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
-                               vector<graph>& graphs);
+                               vector<graph>& graphs, uint32_t chunk_length);
 double cosine_similarity(shingle_vector& sv1, shingle_vector& sv2);
+vector<string> get_string_chunks(string s, uint32_t len);
 
 }
 
