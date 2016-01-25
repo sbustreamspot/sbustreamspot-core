@@ -11,10 +11,8 @@ This experiment evaluates the influence of chunked shingling on graph clustering
 
    * For different values of chunk length `C`, compute the pairwise similarity
      between all 600 graphs in the UIC data.
-
    * Run k-medoids clustering (with `k=6`) with the pairwise similarities as
      input.
-
    * Measure the cluster purity for each value of `C`.
 
 Note that k-medoids is initialized randomly, so YMMV. The provided code
