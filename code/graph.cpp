@@ -24,10 +24,6 @@ void update_graphs(edge& e, vector<graph>& graphs) {
                         src_type)].push_back(make_tuple(dst_id,
                                                         dst_type,
                                                         e_type));
-
-  // add an empty edge list for the destination
-  graphs[gid].insert(make_pair(make_pair(dst_id, dst_type),
-                               vector<tuple<uint32_t,char,char>>()));
 }
 
 void print_edge(tuple<uint32_t,char,char> e) {

@@ -2,6 +2,7 @@
 swoosh
 *.swp
 *.swo
+*.dat
 
 # Compiled Object files
 *.slo
