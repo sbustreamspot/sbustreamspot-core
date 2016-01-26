@@ -3,6 +3,7 @@ swoosh
 *.swp
 *.swo
 *.dat
+*.pyc
 
 # Compiled Object files
 *.slo
