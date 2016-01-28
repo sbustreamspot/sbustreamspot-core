@@ -77,9 +77,13 @@ for C in [25, 50, 100, 150, 200, 300, 500]:
             centers = []
             puritysum = 0.0
             for center, gids in meds.itervalues():
+                c = Counter([g/100 for g in gids])
+                #print '\tCluster label frequencies:', c
                 centers.append(center)
+                puritysum += c.most_common(1)[0][1]
                 for gid in gids:
                     anomaly_scores.append((False, dists[center][gid]))
+            #print '\tCluster purity:', puritysum/600.0
 
             assert len(anomaly_scores) == pct_train * \
                                           NUM_SCENARIO_GRAPHS * len(TRAIN_SCENARIOS)
