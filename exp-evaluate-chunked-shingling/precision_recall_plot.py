@@ -12,23 +12,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 NUM_SCENARIO_GRAPHS = 100   # number of graphs in each scenario
-NUM_TRAIN_SCENARIOS = 5     # number of training (non-attack) scenarios
-ANOMALY = 5                 # attack scenario ID
-NUM_TOTAL_GRAPHS = NUM_SCENARIO_GRAPHS * (NUM_TRAIN_SCENARIOS + 1)
+TRAIN_SCENARIOS = [0, 1, 2, 4, 5]
+NUM_TOTAL_GRAPHS = NUM_SCENARIO_GRAPHS * (len(TRAIN_SCENARIOS) + 1)
 NUM_TRIALS = 10
+ATTACK_GIDS = set(range(300,400))
+NORMAL_GIDS = set(range(0,300) + range(400,600))
 
 random.seed(20)
-
-LABELS = {}                 # map graph ID to scenario label
-for i in range(NUM_TRAIN_SCENARIOS+1):
-    for j in range(NUM_SCENARIO_GRAPHS):
-        LABELS[100*i + j] = i
+np.random.seed(20)
 
 def get_train_test_ids(pct_train):
     num_graphs_train = int(pct_train * NUM_SCENARIO_GRAPHS) 
     train_ids = []
     test_ids = []
-    for i in range(NUM_TRAIN_SCENARIOS):
+    for i in TRAIN_SCENARIOS:
         # sample pct_train gid's from each scenario
         scenario_gids = range(100*i, 100*i + NUM_SCENARIO_GRAPHS)
 
@@ -39,7 +36,7 @@ def get_train_test_ids(pct_train):
         train_ids.extend(train_gids)
         test_ids.extend(test_gids)
 
-    test_ids.extend(range(500,600))
+    test_ids.extend(ATTACK_GIDS)
     return train_ids, test_ids
 
 for C in [25, 50, 100, 150, 200, 300, 500]:
@@ -81,17 +78,11 @@ for C in [25, 50, 100, 150, 200, 300, 500]:
             puritysum = 0.0
             for center, gids in meds.itervalues():
                 centers.append(center)
-                c = Counter([LABELS[g] for g in gids])
-                #print '\tCluster label frequencies:', c
-                puritysum += c.most_common(1)[0][1]
                 for gid in gids:
                     anomaly_scores.append((False, dists[center][gid]))
-            #print '\tCluster purity:', puritysum / 600.0
-
-            # evaluate clustering purity
 
             assert len(anomaly_scores) == pct_train * \
-                                          NUM_SCENARIO_GRAPHS * NUM_TRAIN_SCENARIOS
+                                          NUM_SCENARIO_GRAPHS * len(TRAIN_SCENARIOS)
 
             # compute anomaly scores for test gids (= dist to nearest cluster medoid)
             for gid in test_gids:
@@ -99,7 +90,7 @@ for C in [25, 50, 100, 150, 200, 300, 500]:
                                         for center in centers],
                                        key=lambda x: x[1])
                 min_center, min_dist = center_dists[0]
-                if LABELS[gid] == ANOMALY:
+                if gid in ATTACK_GIDS:
                     anomaly_scores.append((True, min_dist))
                     #print 'Anomaly:', min_center, min_dist,
                     #print [(center, dists[gid][center]) for center in centers]
