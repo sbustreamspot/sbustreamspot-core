@@ -4,6 +4,7 @@ swoosh
 *.swo
 *.dat
 *.pyc
+*.pdf
 
 # Compiled Object files
 *.slo
