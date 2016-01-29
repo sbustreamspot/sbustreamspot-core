@@ -24,10 +24,6 @@ void update_graphs(edge& e, vector<graph>& graphs) {
                         src_type)].push_back(make_tuple(dst_id,
                                                         dst_type,
                                                         e_type));
-
-  // add an empty edge list for the destination
-  graphs[gid].insert(make_pair(make_pair(dst_id, dst_type),
-                               vector<tuple<uint32_t,char,char>>()));
 }
 
 void print_edge(tuple<uint32_t,char,char> e) {
@@ -51,7 +47,7 @@ void print_graph(graph& g) {
 
 void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
-                               vector<graph>& graphs) {
+                               vector<graph>& graphs, uint32_t chunk_length) {
 
   unordered_set<string> unique_shingles;
   vector<unordered_map<string,uint32_t>> temp_shingle_vectors(graphs.size());
@@ -103,8 +99,11 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
         }
       }
 
-      temp_shingle_vectors[i][shingle]++; // increment shingle count
-      unique_shingles.insert(shingle);
+      // split shingle into chunks and increment frequency
+      for (auto& chunk : get_string_chunks(shingle, chunk_length)) {
+        temp_shingle_vectors[i][chunk]++;
+        unique_shingles.insert(chunk);
+      }
     }
 #ifdef DEBUG
     cout << "Shingles in graph " << i << ":\n";
@@ -113,6 +112,7 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
     }
 #endif
   }
+
 
   // use unique shingles to assign shingle id's
   uint32_t current_id = 0;
@@ -147,6 +147,14 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
     cout << endl;
   }
 #endif
+}
+
+vector<string> get_string_chunks(string s, uint32_t len) {
+  vector<string> chunks;
+  for (uint32_t offset = 0; offset < s.length(); offset += len) {
+    chunks.push_back(s.substr(offset, len));
+  }
+  return chunks;
 }
 
 double cosine_similarity(shingle_vector& sv1, shingle_vector& sv2) {
