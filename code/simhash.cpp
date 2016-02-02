@@ -8,8 +8,8 @@
 namespace std {
 
 void construct_simhash_sketch(bitset<L>& simhash_sketch,
-                              shingle_vector& sv,
-                              vector<vector<int>>& random_vectors) {
+                              const shingle_vector& sv,
+                              const vector<vector<int>>& random_vectors) {
   for (uint32_t i = 0; i < L; i++) {
     // compute i'th bit of the sketch
     int dot_product = 0;
@@ -20,7 +20,7 @@ void construct_simhash_sketch(bitset<L>& simhash_sketch,
   }
 }
 
-double simhash_similarity(bitset<L> sketch1, bitset<L> sketch2) {
+double simhash_similarity(const bitset<L>& sketch1, const bitset<L>& sketch2) {
   // XOR = 0 if bits are the same, 1 otherwise
   return static_cast<double>((~(sketch1 ^ sketch2)).count()) / L;
 }
