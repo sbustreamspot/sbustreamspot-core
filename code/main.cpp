@@ -18,21 +18,27 @@
 using namespace std;
 
 void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&);
-void compute_similarities(vector<shingle_vector>& shingle_vectors,
-                          vector<bitset<L>>& simhash_sketches);
+void compute_similarities(const vector<shingle_vector>& shingle_vectors,
+                          const vector<bitset<L>>& simhash_sketches);
 void construct_random_vectors(vector<vector<int>>& random_vectors,
                               uint32_t rvsize,
                               bernoulli_distribution& bernoulli,
                               mt19937_64& prng);
-void construct_simhash_sketches(vector<shingle_vector>& shingle_vectors,
-                                vector<vector<int>>& random_vectors,
+void construct_simhash_sketches(const vector<shingle_vector>& shingle_vectors,
+                                const vector<vector<int>>& random_vectors,
                                 vector<bitset<L>>& simhash_sketches);
-void perform_lsh_banding(vector<bitset<L>>& simhash_sketches,
+void perform_lsh_banding(const vector<uint32_t>& normal_gids,
+                         const vector<bitset<L>>& simhash_sketches,
                          vector<unordered_map<bitset<R>,vector<uint32_t>>>&
                             hash_tables);
-void print_lsh_clusters(vector<bitset<L>>& simhash_sketches,
-                         vector<unordered_map<bitset<R>,vector<uint32_t>>>&
+void print_lsh_clusters(const vector<uint32_t>& normal_gids,
+                        const vector<bitset<L>>& simhash_sketches,
+                        const vector<unordered_map<bitset<R>,vector<uint32_t>>>&
                             hash_tables);
+void test_anomalies(uint32_t num_graphs,
+                    const vector<bitset<L>>& simhash_sketches,
+                    const vector<unordered_map<bitset<R>,vector<uint32_t>>>&
+                      hash_tables);
 
 void print_usage() {
   cout << "USAGE: ./swoosh <edge file> <chunk length>\n";
@@ -92,11 +98,36 @@ int main(int argc, char *argv[]) {
   cout << "Computing pairwise similarities:" << endl;
   compute_similarities(shingle_vectors, simhash_sketches);
 
-  cout << "LSH banding:" << endl;
-  perform_lsh_banding(simhash_sketches, hash_tables);
+  // label attack/normal graph id's
+  vector<uint32_t> normal_gids;
+  vector<uint32_t> attack_gids;
+  if (num_graphs == 600) { // UIC data hack
+    for (uint32_t i = 0; i < 300; i++) {
+      normal_gids.push_back(i);
+    }
+    for (uint32_t i = 300; i < 400; i++) {
+      attack_gids.push_back(i);
+    }
+    for (uint32_t i = 400; i < 600; i++) {
+      normal_gids.push_back(i);
+    }
+  } else {
+    for (uint32_t i = 0; i < num_graphs/2; i++) {
+      normal_gids.push_back(i);
+    }
+    for (uint32_t i = num_graphs/2; i < num_graphs; i++) {
+      attack_gids.push_back(i);
+    }
+  }
 
-  cout << "Print LSH clusters:" << endl;
-  print_lsh_clusters(simhash_sketches, hash_tables);
+  cout << "Performing LSH banding:" << endl;
+  perform_lsh_banding(normal_gids, simhash_sketches, hash_tables);
+
+  cout << "Printing LSH clusters:" << endl;
+  print_lsh_clusters(normal_gids, simhash_sketches, hash_tables);
+
+  cout << "Testing anomalies:" << endl;
+  test_anomalies(num_graphs, simhash_sketches, hash_tables);
 
   return 0;
 }
@@ -122,8 +153,8 @@ void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng) {
 #endif
 }
 
-void compute_similarities(vector<shingle_vector>& shingle_vectors,
-                          vector<bitset<L>>& simhash_sketches) {
+void compute_similarities(const vector<shingle_vector>& shingle_vectors,
+                          const vector<bitset<L>>& simhash_sketches) {
   for (uint32_t i = 0; i < shingle_vectors.size(); i++) {
     for (uint32_t j = 0; j < shingle_vectors.size(); j++) {
       double cosine = cosine_similarity(shingle_vectors[i],
@@ -132,11 +163,8 @@ void compute_similarities(vector<shingle_vector>& shingle_vectors,
       double hashsim = simhash_similarity(simhash_sketches[i], simhash_sketches[j]);
       double diff = abs(angsim - hashsim)/angsim;
       cout << i << "\t" << j << "\t";
-      cout << cosine;
-#ifdef DEBUG
-      cout << "\t" << angsim << "\t" << hashsim;
+      cout << cosine << "\t" << angsim << "\t" << hashsim;
       cout << "\t" << diff;
-#endif
       cout << endl;
     }
   }
@@ -166,8 +194,8 @@ void construct_random_vectors(vector<vector<int>>& random_vectors,
 #endif
 }
 
-void construct_simhash_sketches(vector<shingle_vector>& shingle_vectors,
-                                vector<vector<int>>& random_vectors,
+void construct_simhash_sketches(const vector<shingle_vector>& shingle_vectors,
+                                const vector<vector<int>>& random_vectors,
                                 vector<bitset<L>>& simhash_sketches) {
   // compute SimHash sketches
   simhash_sketches.resize(shingle_vectors.size());
@@ -184,14 +212,14 @@ void construct_simhash_sketches(vector<shingle_vector>& shingle_vectors,
 #endif
 }
 
-void perform_lsh_banding(vector<bitset<L>>& simhash_sketches,
+void perform_lsh_banding(const vector<uint32_t>& normal_gids,
+                         const vector<bitset<L>>& simhash_sketches,
                          vector<unordered_map<bitset<R>,vector<uint32_t>>>&
                             hash_tables) {
   // LSH-banding: assign graphs to hashtable buckets
-  for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
-    hash_bands(i, simhash_sketches[i], hash_tables);
+  for (auto& gid : normal_gids) {
+    hash_bands(gid, simhash_sketches[gid], hash_tables);
   }
-
 #ifdef DEBUG
   cout << "Hash tables after hashing bands:\n";
   for (uint32_t i = 0; i < B; i++) {
@@ -208,16 +236,13 @@ void perform_lsh_banding(vector<bitset<L>>& simhash_sketches,
 #endif
 }
 
-void print_lsh_clusters(vector<bitset<L>>& simhash_sketches,
-                         vector<unordered_map<bitset<R>,vector<uint32_t>>>&
+void print_lsh_clusters(const vector<uint32_t>& normal_gids,
+                        const vector<bitset<L>>& simhash_sketches,
+                        const vector<unordered_map<bitset<R>,vector<uint32_t>>>&
                             hash_tables) {
-#ifdef DEBUG
-  cout << "Printing LSH clusters:" << endl;
-#endif
-
-  unordered_set<uint32_t> graphs(simhash_sketches.size());
-  for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
-    graphs.insert(i);
+  unordered_set<uint32_t> graphs(normal_gids.size());
+  for (auto& gid : normal_gids) {
+    graphs.insert(gid);
   }
 
   while (!graphs.empty()) {
@@ -251,14 +276,30 @@ void print_lsh_clusters(vector<bitset<L>>& simhash_sketches,
       }
     }
 
-    cout << "\tCluster: {";
     for (auto& e : cluster) {
-      cout << " " << e;
+      cout << e << " ";
     }
-    cout << " } Size: " << cluster.size() << endl;
+    cout << endl;
 
     for (auto& e : cluster) {
       graphs.erase(e);
+    }
+  }
+}
+
+void test_anomalies(uint32_t num_graphs,
+                    const vector<bitset<L>>& simhash_sketches,
+                    const vector<unordered_map<bitset<R>,vector<uint32_t>>>&
+                      hash_tables) {
+  // for each attack graph, hash it to the B hash tables
+  // if any bucket hashed to contains a graph, the attack is not an anomaly
+  // otherwise, the graph is isolated, and is an anomaly
+  for (uint32_t gid = 0; gid < num_graphs; gid++) {
+    cout << gid << "\t";
+    if (is_isolated(simhash_sketches[gid], hash_tables)) {
+      cout << "T" << endl;
+    } else {
+      cout << "F" << endl;
     }
   }
 }

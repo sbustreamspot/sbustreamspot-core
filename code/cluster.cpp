@@ -9,7 +9,7 @@
 
 namespace std {
 
-void hash_bands(uint32_t gid, bitset<L>& sketch,
+void hash_bands(uint32_t gid, const bitset<L>& sketch,
                 vector<unordered_map<bitset<R>,vector<uint32_t>>>& hash_tables) {
 #ifdef DEBUG
   cout << "Hashing bands of GID: " << gid << endl;
@@ -30,9 +30,24 @@ void hash_bands(uint32_t gid, bitset<L>& sketch,
   }
 }
 
-void get_shared_bucket_graphs(bitset<L>& sketch,
-                              vector<unordered_map<bitset<R>,
-                                                   vector<uint32_t>>>& hash_tables,
+bool is_isolated(const bitset<L>& sketch,
+                 const vector<unordered_map<bitset<R>,vector<uint32_t>>>&
+                    hash_tables) {
+  bitset<L> mask = bitset<L>(string(R, '1')); // R one's
+  for (uint32_t i = 0; i < B; i++) {
+    string band_string = (sketch >> (R * i) & mask).to_string();
+    band_string = band_string.substr(band_string.length() - R, R);
+    bitset<R> band(band_string);
+    if (hash_tables[i].find(band) != hash_tables[i].end()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void get_shared_bucket_graphs(const bitset<L>& sketch,
+                              const vector<unordered_map<bitset<R>,
+                                           vector<uint32_t>>>& hash_tables,
                               unordered_set<uint32_t>& shared_bucket_graphs) {
   bitset<L> mask = bitset<L>(string(R, '1')); // R one's
   for (uint32_t i = 0; i < B; i++) {
@@ -41,7 +56,7 @@ void get_shared_bucket_graphs(bitset<L>& sketch,
     band_string = band_string.substr(band_string.length() - R, R);
     bitset<R> band(band_string);
 
-    for (auto& gid : hash_tables[i][band]) {
+    for (auto& gid : hash_tables[i].at(band)) {
       shared_bucket_graphs.insert(gid);
     }
   }

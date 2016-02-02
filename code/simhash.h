@@ -11,9 +11,9 @@
 namespace std {
 
 void construct_simhash_sketch(bitset<L>& simhash_sketch,
-                              shingle_vector& sv,
-                              vector<vector<int>>& random_vectors);
-double simhash_similarity(bitset<L> sketch1, bitset<L> sketch2);
+                              const shingle_vector& sv,
+                              const vector<vector<int>>& random_vectors);
+double simhash_similarity(const bitset<L>& sketch1, const bitset<L>& sketch2);
 
 }
 #endif

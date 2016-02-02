@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cmath>
 #include "graph.h"
 #include "hash.h"
@@ -157,23 +158,27 @@ vector<string> get_string_chunks(string s, uint32_t len) {
   return chunks;
 }
 
-double cosine_similarity(shingle_vector& sv1, shingle_vector& sv2) {
+double cosine_similarity(const shingle_vector& sv1, const shingle_vector& sv2) {
   double dot_product = 0.0, magnitude1 = 0.0, magnitude2 = 0.0;
 
   uint32_t size = sv1.size();
+  assert(sv1.size() == sv2.size());
   for (uint32_t i = 0; i < size; i++) {
-    magnitude1 += sv1[i] * sv1[i];
+    magnitude1 += static_cast<double>(sv1[i]) * static_cast<double>(sv1[i]);
   }
 
   for (uint32_t i = 0; i < size; i++) {
-    magnitude2 += sv2[i] * sv2[i];
+    magnitude2 += static_cast<double>(sv2[i]) * static_cast<double>(sv2[i]);
   }
 
   for (uint32_t i = 0; i < size; i++) {
-    dot_product += sv1[i] * sv2[i];
+    dot_product += static_cast<double>(sv1[i]) * static_cast<double>(sv2[i]);
   }
 
-  return dot_product / (sqrt(magnitude1) * sqrt(magnitude2));
+  double cosine =  dot_product / (sqrt(magnitude1) * sqrt(magnitude2));
+
+  assert(cosine >= 0.0 && cosine <= 1.0);
+  return cosine;
 }
 
 } // namespace
