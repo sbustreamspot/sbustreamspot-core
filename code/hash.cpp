@@ -11,12 +11,12 @@ namespace std {
  *    "Strongly universal string hashing is fast."
  *    Computer Journal, 2014.
  */
-uint8_t hashmulti(const string& key, vector<uint64_t>& randbits) {
+int hashmulti(const string& key, const vector<uint64_t>& randbits) {
   uint64_t sum = randbits[0];
   for (uint32_t i = 0; i < key.length(); i++) {
     sum += randbits[i+1] * (static_cast<uint64_t>(key[i]) & 0xff); // sign-extension
   }
-  return static_cast<uint8_t>((sum >> 63) & 1); // MSB
+  return 2 * static_cast<int>((sum >> 63) & 1) - 1; // MSB
 }
 
 }
