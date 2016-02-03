@@ -1,6 +1,7 @@
 #ifndef SWOOSH_GRAPH_H_
 #define SWOOSH_GRAPH_H_
 
+#include <bitset>
 #include "param.h"
 #include <string>
 #include <tuple>
