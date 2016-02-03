@@ -1,5 +1,6 @@
 #include <bitset>
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <queue>
 #include <random>
@@ -14,12 +15,14 @@
 #include "io.h"
 #include "param.h"
 #include "simhash.h"
+#include "streamhash.h"
 
 using namespace std;
 
-void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&);
+void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&, uint32_t);
 void compute_similarities(const vector<shingle_vector>& shingle_vectors,
-                          const vector<bitset<L>>& simhash_sketches);
+                          const vector<bitset<L>>& simhash_sketches,
+                          const vector<bitset<L>>& streamhash_sketches);
 void construct_random_vectors(vector<vector<int>>& random_vectors,
                               uint32_t rvsize,
                               bernoulli_distribution& bernoulli,
@@ -48,24 +51,28 @@ int main(int argc, char *argv[]) {
   vector<edge> edges;                            // edge list
   vector<graph> graphs;                          // graph list
 
-  bitset<L> sketch;                              // L-bit sketch (initially 0)
-  vector<int> projection(L);                     // projection vector
   vector<vector<uint64_t>> H(L);                 // Universal family H, contains
                                                  // L hash functions, each
-                                                 // represented by SMAX+2 64-bit
-                                                 // random integers
+                                                 // represented by chunk_length+2
+                                                 // 64-bit random integers
 
   mt19937_64 prng(SEED);                         // Mersenne Twister 64-bit PRNG
   bernoulli_distribution bernoulli(0.5);         // to generate random vectors
   vector<vector<int>> random_vectors(L);         // |S|-element random vectors
   vector<bitset<L>> simhash_sketches;
+  vector<bitset<L>> streamhash_sketches;
+  vector<vector<int>> streamhash_projections;
 
   vector<shingle_vector> shingle_vectors;        // |S|-element shingle vectors
   unordered_map<string,uint32_t> shingle_id;
   unordered_set<string> unique_shingles;
 
-  vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
-                                                 // B hash-tables
+  //vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
+
+  // for timing
+  chrono::time_point<chrono::steady_clock> start;
+  chrono::time_point<chrono::steady_clock> end;
+  chrono::microseconds diff;
 
   if (argc != 3) {
     print_usage();
@@ -75,19 +82,42 @@ int main(int argc, char *argv[]) {
   // arguments
   string edge_file(argv[1]);
   uint32_t chunk_length = atoi(argv[2]);
+  cout << "Executing with chunk length: " << chunk_length << endl;
+  
+  // FIXME: Tailored for this configuration now
+  assert(K == 1 && chunk_length >= 4);
 
-  //allocate_random_bits(H, prng);
+  allocate_random_bits(H, prng, chunk_length);
   uint32_t num_graphs = read_edges(edge_file, edges);
 
-  cout << "Constructing " << num_graphs << " graphs:" << endl;
+  // add edges to graphs
+  cout << "Constructing " << num_graphs << " graphs ";
+  cout << "and StreamHash sketches: " << endl;
+
   graphs.resize(num_graphs);
-  for (auto& e : edges) {
-    update_graphs(e, graphs); // TODO: Update sketches/clustering too
+  streamhash_sketches.resize(num_graphs);
+  streamhash_projections = vector<vector<int>>(num_graphs,
+                                               vector<int>(L,0));
+
+  start = chrono::steady_clock::now();
+  for (uint32_t i = 0; i < edges.size(); i++) {
+    update_graphs(edges[i], graphs);
+    update_streamhash_sketches(edges[i], graphs, streamhash_sketches,
+                               streamhash_projections, chunk_length, H);
   }
+  end = chrono::steady_clock::now();
+  diff = chrono::duration_cast<chrono::microseconds>(end - start);
+  cout << "\tGraph + StreamHash sketch update (per-edge): ";
+  cout << static_cast<double>(diff.count())/edges.size() << "us" << endl;
 
   cout << "Constructing shingle vectors:" << endl;
+  start = chrono::steady_clock::now();
   construct_shingle_vectors(shingle_vectors, shingle_id, graphs,
                             chunk_length);
+  end = chrono::steady_clock::now();
+  diff = chrono::duration_cast<chrono::microseconds>(end - start);
+  cout << "\tShingle vector construction (per-graph): ";
+  cout << static_cast<double>(diff.count())/num_graphs << "us" << endl;
 
   cout << "Constructing Simhash sketches:" << endl;
   construct_random_vectors(random_vectors, shingle_vectors[0].size(),
@@ -96,9 +126,9 @@ int main(int argc, char *argv[]) {
                              simhash_sketches);
 
   cout << "Computing pairwise similarities:" << endl;
-  compute_similarities(shingle_vectors, simhash_sketches);
+  compute_similarities(shingle_vectors, simhash_sketches, streamhash_sketches);
 
-  // label attack/normal graph id's
+  /*// label attack/normal graph id's
   vector<uint32_t> normal_gids;
   vector<uint32_t> attack_gids;
   if (num_graphs == 600) { // UIC data hack
@@ -127,17 +157,18 @@ int main(int argc, char *argv[]) {
   print_lsh_clusters(normal_gids, simhash_sketches, hash_tables);
 
   cout << "Testing anomalies:" << endl;
-  test_anomalies(num_graphs, simhash_sketches, hash_tables);
+  test_anomalies(num_graphs, simhash_sketches, hash_tables);*/
 
   return 0;
 }
 
-void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng) {
+void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng,
+                          uint32_t chunk_length) {
   // allocate random bits for hashing
   for (uint32_t i = 0; i < L; i++) {
     // hash function h_i \in H
-    H[i] = vector<uint64_t>(SMAX + 2);
-    for (int j = 0; j < SMAX + 2; j++) {
+    H[i] = vector<uint64_t>(chunk_length + 2);
+    for (uint32_t j = 0; j < chunk_length + 2; j++) {
       // random number m_j of h_i
       H[i][j] = prng();
     }
@@ -145,7 +176,7 @@ void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng) {
 #ifdef DEBUG
     cout << "64-bit random numbers:\n";
     for (int i = 0; i < L; i++) {
-      for (int j = 0; j < SMAX + 2; j++) {
+      for (int j = 0; j < chunk_length + 2; j++) {
         cout << H[i][j] << " ";
       }
       cout << endl;
@@ -154,17 +185,23 @@ void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng) {
 }
 
 void compute_similarities(const vector<shingle_vector>& shingle_vectors,
-                          const vector<bitset<L>>& simhash_sketches) {
+                          const vector<bitset<L>>& simhash_sketches,
+                          const vector<bitset<L>>& streamhash_sketches) {
   for (uint32_t i = 0; i < shingle_vectors.size(); i++) {
     for (uint32_t j = 0; j < shingle_vectors.size(); j++) {
       double cosine = cosine_similarity(shingle_vectors[i],
                                         shingle_vectors[j]);
       double angsim = 1 - acos(cosine)/PI;
-      double hashsim = simhash_similarity(simhash_sketches[i], simhash_sketches[j]);
-      double diff = abs(angsim - hashsim)/angsim;
+      double simhash_sim = simhash_similarity(simhash_sketches[i],
+                                              simhash_sketches[j]);
+      double streamhash_sim = streamhash_similarity(streamhash_sketches[i],
+                                                    streamhash_sketches[j]);
       cout << i << "\t" << j << "\t";
-      cout << cosine << "\t" << angsim << "\t" << hashsim;
-      cout << "\t" << diff;
+      cout << cosine;
+      cout << "\t" << angsim;
+      cout << "\t" << simhash_sim;
+      cout << "\t" << streamhash_sim;
+      cout << "\t" << (streamhash_sim - angsim);
       cout << endl;
     }
   }

@@ -1,6 +1,8 @@
 #ifndef SWOOSH_GRAPH_H_
 #define SWOOSH_GRAPH_H_
 
+#include <bitset>
+#include "param.h"
 #include <string>
 #include <tuple>
 #include <vector>
@@ -30,6 +32,11 @@ void print_graph(graph& g);
 void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
                                vector<graph>& graphs, uint32_t chunk_length);
+void update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
+                                vector<bitset<L>>& streamhash_sketches,
+                                vector<vector<int>>& streamhash_projections,
+                                uint32_t chunk_length,
+                                const vector<vector<uint64_t>>& H);
 double cosine_similarity(const shingle_vector& sv1, const shingle_vector& sv2);
 vector<string> get_string_chunks(string s, uint32_t len);
 

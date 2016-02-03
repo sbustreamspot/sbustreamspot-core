@@ -6,7 +6,7 @@
 
 namespace std {
 
-uint8_t hashmulti(const string& key, vector<uint64_t>& randbits);
+int hashmulti(const string& key, const vector<uint64_t>& randbits);
 
 /* Combination hash from Boost */
 template <class T>
