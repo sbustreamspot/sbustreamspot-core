@@ -19,7 +19,7 @@
 
 using namespace std;
 
-void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&);
+void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&, uint32_t);
 void compute_similarities(const vector<shingle_vector>& shingle_vectors,
                           const vector<bitset<L>>& simhash_sketches,
                           const vector<bitset<L>>& streamhash_sketches);
@@ -53,8 +53,8 @@ int main(int argc, char *argv[]) {
 
   vector<vector<uint64_t>> H(L);                 // Universal family H, contains
                                                  // L hash functions, each
-                                                 // represented by SMAX+2 64-bit
-                                                 // random integers
+                                                 // represented by chunk_length+2
+                                                 // 64-bit random integers
 
   mt19937_64 prng(SEED);                         // Mersenne Twister 64-bit PRNG
   bernoulli_distribution bernoulli(0.5);         // to generate random vectors
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
   // FIXME: Tailored for this configuration now
   assert(K == 1 && chunk_length >= 4);
 
-  allocate_random_bits(H, prng);
+  allocate_random_bits(H, prng, chunk_length);
   uint32_t num_graphs = read_edges(edge_file, edges);
 
   // add edges to graphs
@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
   cout << "Computing pairwise similarities:" << endl;
   compute_similarities(shingle_vectors, simhash_sketches, streamhash_sketches);
 
-  // label attack/normal graph id's
+  /*// label attack/normal graph id's
   vector<uint32_t> normal_gids;
   vector<uint32_t> attack_gids;
   if (num_graphs == 600) { // UIC data hack
@@ -157,17 +157,18 @@ int main(int argc, char *argv[]) {
   print_lsh_clusters(normal_gids, simhash_sketches, hash_tables);
 
   cout << "Testing anomalies:" << endl;
-  test_anomalies(num_graphs, simhash_sketches, hash_tables);
+  test_anomalies(num_graphs, simhash_sketches, hash_tables);*/
 
   return 0;
 }
 
-void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng) {
+void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng,
+                          uint32_t chunk_length) {
   // allocate random bits for hashing
   for (uint32_t i = 0; i < L; i++) {
     // hash function h_i \in H
-    H[i] = vector<uint64_t>(SMAX + 2);
-    for (int j = 0; j < SMAX + 2; j++) {
+    H[i] = vector<uint64_t>(chunk_length + 2);
+    for (uint32_t j = 0; j < chunk_length + 2; j++) {
       // random number m_j of h_i
       H[i][j] = prng();
     }
@@ -175,7 +176,7 @@ void allocate_random_bits(vector<vector<uint64_t>>& H, mt19937_64& prng) {
 #ifdef DEBUG
     cout << "64-bit random numbers:\n";
     for (int i = 0; i < L; i++) {
-      for (int j = 0; j < SMAX + 2; j++) {
+      for (int j = 0; j < chunk_length + 2; j++) {
         cout << H[i][j] << " ";
       }
       cout << endl;
