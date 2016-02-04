@@ -29,6 +29,8 @@ typedef vector<uint32_t> shingle_vector;
 void update_graphs(edge& e, vector<graph>& graphs);
 void print_edge(edge& e);
 void print_graph(graph& g);
+unordered_map<string,uint32_t>
+  construct_temp_shingle_vector(const graph& g, uint32_t chunk_length);
 void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
                                vector<graph>& graphs, uint32_t chunk_length);

@@ -28,6 +28,61 @@ void update_graphs(edge& e, vector<graph>& graphs) {
                                                         e_type));
 }
 
+unordered_map<string,uint32_t>
+  construct_temp_shingle_vector(const graph& g, uint32_t chunk_length) {
+  unordered_map<string,uint32_t> temp_shingle_vector;
+  for (auto& kv : g) {
+#ifdef VERBOSE
+      cout << "OkBFT from " << kv.first.first << " " << kv.first.second;
+      cout << " (K = " << K << ")";
+      cout << " fanout = " << kv.second.size() << endl;
+#endif
+    string shingle; // shingle from this source node
+    queue<tuple<uint32_t,char,char>> q; // (nodeid, nodetype, edgetype)
+    unordered_map<uint32_t,uint32_t> d;
+
+    q.push(make_tuple(kv.first.first, kv.first.second, ' '));
+    d[kv.first.first] = 0;
+
+    while (!q.empty()) {
+      auto& node = q.front();
+      auto& uid = get<0>(node);
+      auto& utype = get<1>(node);
+      auto& etype = get<2>(node);
+      q.pop();
+
+      // use destination and edge types to construct shingle
+      shingle += etype;
+      shingle += utype;
+
+      if (d[uid] == K) { // node is K hops away from src_id
+        continue;        // don't follow its edges
+      }
+
+      // outgoing edges are already sorted by timestamp
+      for (auto& e : g.at(make_pair(uid, utype))) {
+        auto& vid = get<0>(e);
+        d[vid] = d[uid] + 1;
+        q.push(e);
+      }
+    }
+
+    // split shingle into chunks and increment frequency
+    for (auto& chunk : get_string_chunks(shingle, chunk_length)) {
+      temp_shingle_vector[chunk]++;
+    }
+  }
+
+#ifdef DEBUG
+  cout << "Shingles in graph:" << endl;
+  for (auto& kv : temp_shingle_vector) {
+    cout << kv.first << " => " << kv.second << endl;
+  }
+#endif
+
+  return temp_shingle_vector;
+}
+
 void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
                                vector<graph>& graphs, uint32_t chunk_length) {

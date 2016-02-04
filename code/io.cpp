@@ -1,20 +1,27 @@
 #include <fcntl.h>
+#include <fstream>
 #include "graph.h"
 #include "io.h"
 #include <iostream>
 #include "param.h"
 #include <string>
+#include <sstream>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <tuple>
 #include <unistd.h>
 #include "util.h"
 #include <vector>
 
 namespace std {
 
-uint32_t read_edges(string filename, vector<edge>& edges) {
+tuple<uint32_t,vector<edge>,vector<edge>>
+  read_edges(string filename, const unordered_set<uint32_t>& train_gids) {
   // read edges into memory
   cout << "Reading edges from: " << filename << endl;
+
+  vector<edge> train_edges;
+  vector<edge> test_edges;
 
   // get file size
   struct stat fstatbuf;
@@ -77,9 +84,16 @@ uint32_t read_edges(string filename, vector<edge>& edges) {
     i++; // skip newline
 
     // add an edge to memory
-    edges.push_back(make_tuple(src_id, src_type,
-                               dst_id, dst_type,
-                               e_type, graph_id));
+    if (train_gids.find(graph_id) != train_gids.end()) {
+      train_edges.push_back(make_tuple(src_id, src_type,
+                                       dst_id, dst_type,
+                                       e_type, graph_id));
+    } else {
+      test_edges.push_back(make_tuple(src_id, src_type,
+                                      dst_id, dst_type,
+                                      e_type, graph_id));
+    }
+
     line++;
   }
 
@@ -93,7 +107,41 @@ uint32_t read_edges(string filename, vector<edge>& edges) {
     }
 #endif
 
-  return max_gid + 1;
+  return make_tuple(max_gid + 1, train_edges, test_edges);
+}
+
+tuple<vector<vector<uint32_t>>, vector<double>, double>
+  read_bootstrap_clusters(string bootstrap_file, vector<int>& cluster_map) {
+  int nclusters;
+  double global_threshold;
+  ifstream f(bootstrap_file);
+  string line;
+  stringstream ss;
+
+  getline(f, line);
+  ss.str(line);
+  ss >> nclusters >> global_threshold;
+  vector<double> cluster_thresholds(nclusters);
+  vector<vector<uint32_t>> clusters(nclusters);
+
+  for (int i = 0; i < nclusters; i++) {
+    getline(f, line);
+    ss.clear();
+    ss.str(line);
+
+    double cluster_threshold;
+    ss >> cluster_threshold;
+    cluster_thresholds[i] = cluster_threshold;
+
+    while (ss) {
+      uint32_t gid;
+      ss >> gid;
+      clusters[i].push_back(gid);
+      cluster_map[gid] = i;
+    }
+  }
+
+  return make_tuple(clusters, cluster_thresholds, global_threshold);
 }
 
 }
