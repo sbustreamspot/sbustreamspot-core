@@ -28,6 +28,7 @@ construct_centroid_sketches(const vector<vector<int>>& streamhash_projections,
                             const vector<vector<uint32_t>>& bootstrap_clusters,
                             uint32_t nclusters);
 void update_distances_and_clusters(uint32_t gid,
+                                   const vector<int>& projection_delta,
                                    const vector<bitset<L>>& graph_sketches,
                                    const vector<vector<int>>& graph_projections,
                                    vector<bitset<L>>& centroid_sketches,

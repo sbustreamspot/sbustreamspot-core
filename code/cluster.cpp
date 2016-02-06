@@ -95,6 +95,7 @@ construct_centroid_sketches(const vector<vector<int>>& streamhash_projections,
 }
 
 void update_distances_and_clusters(uint32_t gid,
+                                   const vector<int>& projection_delta,
                                    const vector<bitset<L>>& graph_sketches,
                                    const vector<vector<int>>& graph_projections,
                                    vector<bitset<L>>& centroid_sketches,
@@ -130,7 +131,7 @@ void update_distances_and_clusters(uint32_t gid,
     // if part of a cluster currently
     if (current_cluster != UNSEEN && current_cluster != ANOMALY) {
       // remove from cluster
-      uint32_t old_cluster_size = cluster_sizes[current_cluster];
+      int old_cluster_size = cluster_sizes[current_cluster];
       cluster_sizes[current_cluster]--;
 
       // update cluster centroid projection/sketch
@@ -152,7 +153,7 @@ void update_distances_and_clusters(uint32_t gid,
       // if a previous cluster existed
       if (current_cluster != UNSEEN && current_cluster != ANOMALY) {
         // remove from current cluster
-        uint32_t old_cluster_size = cluster_sizes[current_cluster];
+        int old_cluster_size = cluster_sizes[current_cluster];
         cluster_sizes[current_cluster]--;
 
         // update cluster centroid projection/sketch
@@ -167,7 +168,7 @@ void update_distances_and_clusters(uint32_t gid,
       }
 
       // add to new cluster
-      uint32_t old_cluster_size = cluster_sizes[nearest_cluster];
+      int old_cluster_size = cluster_sizes[nearest_cluster];
       cluster_sizes[nearest_cluster]++;
 
       // update new cluster centroid projection/sketch
@@ -180,7 +181,14 @@ void update_distances_and_clusters(uint32_t gid,
         centroid_s[l] = centroid_p[l] >= 0 ? 1 : 0;
       }
     } else { // current_cluster = nearest_centroid
-      // no change
+      // only update the current_cluster centroid using the projection delta
+      int current_cluster_size = cluster_sizes[current_cluster];
+      auto& centroid_p = centroid_projections[current_cluster];
+      auto& centroid_s = centroid_sketches[current_cluster];
+      for (uint32_t l = 0; l < L; l++) {
+        centroid_p[l] += projection_delta[l] / current_cluster_size;
+        centroid_s[l] = centroid_p[l] >= 0 ? 1 : 0;
+      }
     }
   }
 }

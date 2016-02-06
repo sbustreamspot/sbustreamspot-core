@@ -1,5 +1,6 @@
 #include <bitset>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include "graph.h"
 #include "hash.h"
@@ -210,15 +211,23 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
 //    - Last chunk length > 2
 //      Hash and add last chunk
 //      Hash and remove last chunk - "et"
-void update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
-                                vector<bitset<L>>& streamhash_sketches,
-                                vector<vector<int>>& streamhash_projections,
-                                uint32_t chunk_length,
-                                const vector<vector<uint64_t>>& H) {
+tuple<vector<int>, chrono::microseconds, chrono::microseconds>
+update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
+                           vector<bitset<L>>& streamhash_sketches,
+                           vector<vector<int>>& streamhash_projections,
+                           uint32_t chunk_length,
+                           const vector<vector<uint64_t>>& H) {
   // source node = (src_id, src_type)
   // dst_node = (dst_id, dst_type)
   // shingle substring = (src_type, e_type, dst_type)
   //assert(K == 1 && chunk_length >= 4);
+
+  // for timing
+  chrono::time_point<chrono::steady_clock> start;
+  chrono::time_point<chrono::steady_clock> end;
+  chrono::microseconds shingle_construction_time;
+  chrono::microseconds sketch_update_time;
+
   auto& src_id = get<F_S>(e);
   auto& src_type = get<F_STYPE>(e);
   auto& gid = get<F_GID>(e);
@@ -226,6 +235,8 @@ void update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
   auto& sketch = streamhash_sketches[gid];
   auto& projection = streamhash_projections[gid];
   auto& g = graphs[gid];
+
+  start = chrono::steady_clock::now(); // start shingle construction
 
   // construct the last chunk
   auto& outgoing_edges = g.at(make_pair(src_id, src_type));
@@ -319,6 +330,10 @@ void update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
     }
   }
 
+  end = chrono::steady_clock::now(); // end shingle construction
+  shingle_construction_time =
+    chrono::duration_cast<chrono::microseconds>(end - start);
+
 #ifdef DEBUG
   cout << "Incoming chunks: ";
   for (auto& c : incoming_chunks) {
@@ -333,15 +348,25 @@ void update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
   cout << endl;
 #endif
 
+  // record the change in the projection vector
+  // this is used to update the centroid
+  vector<int> projection_delta(L, 0);
+
+  start = chrono::steady_clock::now(); // start sketch update
+
   // update the projection vectors
   for (auto& chunk : incoming_chunks) {
     for (uint32_t i = 0; i < L; i++) {
-      projection[i] += hashmulti(chunk, H[i]);
+      int delta = hashmulti(chunk, H[i]);
+      projection[i] += delta;
+      projection_delta[i] += delta;
     }
   }
   for (auto& chunk : outgoing_chunks) {
     for (uint32_t i = 0; i < L; i++) {
-      projection[i] -= hashmulti(chunk, H[i]);
+      int delta = hashmulti(chunk, H[i]);
+      projection[i] -= delta;
+      projection_delta[i] -= delta;
     }
   }
 
@@ -349,6 +374,11 @@ void update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
   for (uint32_t i = 0; i < L; i++) {
     sketch[i] = projection[i] >= 0 ? 1 : 0;
   }
+
+  end = chrono::steady_clock::now(); // end sketch update
+  sketch_update_time = chrono::duration_cast<chrono::microseconds>(end - start);
+
+  return make_tuple(projection_delta, shingle_construction_time, sketch_update_time);
 }
 
 vector<string> get_string_chunks(string s, uint32_t len) {
