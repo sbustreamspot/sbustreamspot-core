@@ -109,19 +109,32 @@ void update_distances_and_clusters(uint32_t gid,
   vector<double> distances(nclusters);
   double min_distance = 5.0;
   int nearest_cluster = -1;
+#ifdef DEBUG
+  cout << "\tUpdating edge for gid: " << gid << endl;
+  cout << "\tDistances: ";
+#endif
   for (uint32_t i = 0; i < nclusters; i++) {
     distances[i] = 1.0 -
       cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
                                           centroid_sketches[i])));
+#ifdef DEBUG
+    cout << distances[i] << " ";
+#endif
     if (distances[i] < min_distance) {
       min_distance = distances[i];
       nearest_cluster = i;
     }
   }
+#ifdef DEBUG
+  cout << endl;
+#endif
 
   // set its anomaly score to distance from nearest centroid
   anomaly_scores[gid] = min_distance;
   int current_cluster = cluster_map[gid];
+#ifdef DEBUG
+  cout << "\tCurrent cluster: " << current_cluster << endl;
+#endif
 
   // if distance > threshold: outlier
   if (min_distance > anomaly_threshold) {
@@ -139,9 +152,17 @@ void update_distances_and_clusters(uint32_t gid,
       auto& centroid_s = centroid_sketches[current_cluster];
       auto& graph_projection = graph_projections[gid];
       for (uint32_t l = 0; l < L; l++) {
-        centroid_p[l] = (centroid_p[l] * old_cluster_size - graph_projection[l]) /
+        centroid_p[l] = (centroid_p[l] * old_cluster_size -
+                          (graph_projection[l] - projection_delta[l])) /
                         (old_cluster_size - 1);
         centroid_s[l] = centroid_p[l] >= 0 ? 1 : 0;
+      }
+
+      // update anomaly score if current cluster == nearest cluster (centroid moved)
+      if (current_cluster == nearest_cluster) {
+        anomaly_scores[gid] = 1.0 -
+          cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+                                              centroid_s)));
       }
     }
   } else { // else if distance <= threshold:
@@ -149,6 +170,9 @@ void update_distances_and_clusters(uint32_t gid,
     if (current_cluster != nearest_cluster) {
       // change cluster mapping from current to new cluster
       cluster_map[gid] = nearest_cluster;
+#ifdef DEBUG
+      cout << "\tNew cluster: " << nearest_cluster << endl;
+#endif
 
       // if a previous cluster existed
       if (current_cluster != UNSEEN && current_cluster != ANOMALY) {
@@ -160,11 +184,29 @@ void update_distances_and_clusters(uint32_t gid,
         auto& centroid_p = centroid_projections[current_cluster];
         auto& centroid_s = centroid_sketches[current_cluster];
         auto& graph_projection = graph_projections[gid];
+
+#ifdef DEBUG
+        cout << "\tPrev. cluster centroid before removing graph:";
+        for (uint32_t j = 0; j < 10; j++)
+          cout << centroid_p[j] << " ";
+        cout << endl;
+#endif
+
         for (uint32_t l = 0; l < L; l++) {
-          centroid_p[l] = (centroid_p[l] * old_cluster_size - graph_projection[l]) /
+          centroid_p[l] = (centroid_p[l] * old_cluster_size -
+                            (graph_projection[l] - projection_delta[l])) /
                           (old_cluster_size - 1);
           centroid_s[l] = centroid_p[l] >= 0 ? 1 : 0;
         }
+
+#ifdef DEBUG
+        cout << "\tPrev. cluster centroid after removing graph:";
+        for (uint32_t j = 0; j < 10; j++)
+          cout << centroid_p[j] << " ";
+        cout << endl;
+#endif
+        // the old cluster centroid moved, but the nearest cluster did not yet
+        // so don't modify the anomaly score yet
       }
 
       // add to new cluster
@@ -175,20 +217,74 @@ void update_distances_and_clusters(uint32_t gid,
       auto& centroid_p = centroid_projections[nearest_cluster];
       auto& centroid_s = centroid_sketches[nearest_cluster];
       auto& graph_projection = graph_projections[gid];
+
+#ifdef DEBUG
+      cout << "\tNew cluster centroid before adding graph: ";
+      for (uint32_t j = 0; j < 10; j++)
+        cout << centroid_p[j] << " ";
+      cout << endl;
+
+      cout << "\tAdding graph: ";
+      for (uint32_t j = 0; j < 10; j++)
+        cout << graph_projection[j] << " ";
+      cout << endl;
+#endif
+
       for (uint32_t l = 0; l < L; l++) {
         centroid_p[l] = (centroid_p[l] * old_cluster_size + graph_projection[l]) /
                         (old_cluster_size + 1);
         centroid_s[l] = centroid_p[l] >= 0 ? 1 : 0;
       }
+
+      // update anomaly score wrt. nearest cluster (centroid moved)
+      anomaly_scores[gid] = 1.0 -
+        cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+                                            centroid_s)));
+
+#ifdef DEBUG
+      cout << "\tNew cluster centroid after adding graph: ";
+      for (uint32_t j = 0; j < 10; j++)
+        cout << centroid_p[j] << " ";
+      cout << endl;
+
+      cout << "\tNew anomaly score: " << anomaly_scores[gid] << endl;
+#endif
     } else { // current_cluster = nearest_centroid
       // only update the current_cluster centroid using the projection delta
       int current_cluster_size = cluster_sizes[current_cluster];
       auto& centroid_p = centroid_projections[current_cluster];
       auto& centroid_s = centroid_sketches[current_cluster];
+
+#ifdef DEBUG
+      cout << "\tModified graph: ";
+      for (uint32_t j = 0; j < 10; j++)
+        cout << graph_projections[gid][j] << " ";
+      cout << endl;
+      cout << "\tDelta: ";
+      for (uint32_t j = 0; j < 10; j++)
+        cout << projection_delta[j] << " ";
+      cout << endl;
+#endif
+
       for (uint32_t l = 0; l < L; l++) {
-        centroid_p[l] += projection_delta[l] / current_cluster_size;
+        centroid_p[l] += static_cast<double>(projection_delta[l]) /
+                         current_cluster_size;
         centroid_s[l] = centroid_p[l] >= 0 ? 1 : 0;
       }
+
+      // update anomaly score wrt. nearest cluster (centroid moved)
+      anomaly_scores[gid] = 1.0 -
+        cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+                                            centroid_s)));
+
+#ifdef DEBUG
+      cout << "\tExisting cluster centroid after modifying graph: ";
+      for (uint32_t j = 0; j < 10; j++)
+        cout << centroid_p[j] << " ";
+      cout << endl;
+
+      cout << "\tNew anomaly score: " << anomaly_scores[gid] << endl;
+#endif
     }
   }
 }

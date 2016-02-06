@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
   double global_threshold;
 
   tie(clusters, cluster_thresholds, global_threshold) =
-    read_bootstrap_clusters(bootstrap_file, cluster_map);
+    read_bootstrap_clusters(bootstrap_file);
   unordered_set<uint32_t> train_gids;
   uint32_t nclusters = clusters.size();
   vector<uint32_t> cluster_sizes(nclusters);
@@ -93,6 +93,7 @@ int main(int argc, char *argv[]) {
     cluster_sizes[i] = clusters[i].size();
     for (auto& gid : clusters[i]) {
       train_gids.insert(gid);
+      cluster_map[gid] = i;
     }
   }
 
@@ -172,6 +173,10 @@ int main(int argc, char *argv[]) {
     cout << s << " ";
   }
   cout << endl;
+  for (auto& s : cluster_map) {
+    cout << s << " ";
+  }
+  cout << endl;
 #endif
 
   // add test edges to graphs
@@ -209,6 +214,7 @@ int main(int argc, char *argv[]) {
 
     // update centroids and centroid-graph distances
     auto& gid = get<5>(e);
+
     start = chrono::steady_clock::now();
     update_distances_and_clusters(gid, projection_delta,
                                   streamhash_sketches,
@@ -290,6 +296,24 @@ int main(int argc, char *argv[]) {
     }
     cout << endl;
   }
+
+#ifdef DEBUG
+  for (uint32_t i = 0; i < num_graphs; i++) {
+    cout << "Graph projection " << i << ": ";
+    for (uint32_t j = 0; j < 10; j++) {
+      cout << streamhash_projections[i][j] << " ";
+    }
+    cout << endl;
+  }
+
+  for (uint32_t i = 0; i < centroid_projections.size(); i++) {
+    cout << "Centroid projection " << i << ": ";
+    for (uint32_t j = 0; j < 10; j++) {
+      cout << centroid_projections[i][j] << " ";
+    }
+    cout << endl;
+  }
+#endif
 
   /*cout << "Constructing shingle vectors:" << endl;
   start = chrono::steady_clock::now();

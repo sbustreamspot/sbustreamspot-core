@@ -111,7 +111,7 @@ tuple<uint32_t,vector<edge>,vector<edge>>
 }
 
 tuple<vector<vector<uint32_t>>, vector<double>, double>
-  read_bootstrap_clusters(string bootstrap_file, vector<int>& cluster_map) {
+  read_bootstrap_clusters(string bootstrap_file) {
   int nclusters;
   double global_threshold;
   ifstream f(bootstrap_file);
@@ -133,11 +133,9 @@ tuple<vector<vector<uint32_t>>, vector<double>, double>
     ss >> cluster_threshold;
     cluster_thresholds[i] = cluster_threshold;
 
-    while (ss) {
-      uint32_t gid;
-      ss >> gid;
+    uint32_t gid;
+    while (ss >> gid) {
       clusters[i].push_back(gid);
-      cluster_map[gid] = i;
     }
   }
 
