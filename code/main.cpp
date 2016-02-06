@@ -189,9 +189,12 @@ int main(int argc, char *argv[]) {
                                                           chrono::microseconds(0));
   vector<chrono::microseconds> cluster_update_times(test_edges.size(),
                                                     chrono::microseconds(0));
-  vector<vector<double>> anomaly_score_iterations(test_edges.size(),
+  uint32_t num_intervals = test_edges.size() / CLUSTER_UPDATE_INTERVAL;
+  if (num_intervals == 0)
+    num_intervals = 1; // if interval length is too long
+  vector<vector<double>> anomaly_score_iterations(num_intervals,
                                                   vector<double>(num_graphs));
-  vector<vector<int>> cluster_map_iterations(test_edges.size(),
+  vector<vector<int>> cluster_map_iterations(num_intervals,
                                              vector<int>(num_graphs));
   uint32_t edge_num = 0;
   for (auto& e : test_edges) {
@@ -227,8 +230,10 @@ int main(int argc, char *argv[]) {
     cluster_update_times[edge_num] = diff;
 
     // store current anomaly scores and cluster assignments
-    anomaly_score_iterations[edge_num] = anomaly_scores;
-    cluster_map_iterations[edge_num] = cluster_map;
+    if (edge_num % CLUSTER_UPDATE_INTERVAL == 0) {
+      anomaly_score_iterations[edge_num/CLUSTER_UPDATE_INTERVAL] = anomaly_scores;
+      cluster_map_iterations[edge_num/CLUSTER_UPDATE_INTERVAL] = cluster_map;
+    }
 
     edge_num++;
 
@@ -283,8 +288,8 @@ int main(int argc, char *argv[]) {
   cout << "\tCluster update: ";
   cout << static_cast<double>(mean_cluster_update_time.count()) << "us" << endl;
 
-  cout << "Iterations " << test_edges.size() << endl;
-  for (uint32_t i = 0; i < test_edges.size(); i++) {
+  cout << "Iterations " << num_intervals << endl;
+  for (uint32_t i = 0; i < num_intervals; i++) {
     auto& a = anomaly_score_iterations[i];
     auto& c = cluster_map_iterations[i];
     for (uint32_t j = 0; j < a.size(); j++) {
