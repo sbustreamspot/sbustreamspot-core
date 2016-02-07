@@ -15,13 +15,14 @@
 
 namespace std {
 
-tuple<uint32_t,vector<edge>,vector<edge>>
+tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   read_edges(string filename, const unordered_set<uint32_t>& train_gids) {
   // read edges into memory
   cout << "Reading edges from: " << filename << endl;
 
   vector<edge> train_edges;
-  vector<edge> test_edges;
+  unordered_map<uint32_t,vector<edge>> test_edges;
+  uint32_t num_test_edges = 0;
 
   // get file size
   struct stat fstatbuf;
@@ -89,9 +90,10 @@ tuple<uint32_t,vector<edge>,vector<edge>>
                                        dst_id, dst_type,
                                        e_type, graph_id));
     } else {
-      test_edges.push_back(make_tuple(src_id, src_type,
-                                      dst_id, dst_type,
-                                      e_type, graph_id));
+      test_edges[graph_id].push_back(make_tuple(src_id, src_type,
+                                                dst_id, dst_type,
+                                                e_type, graph_id));
+      num_test_edges++;
     }
 
     line++;
@@ -107,7 +109,7 @@ tuple<uint32_t,vector<edge>,vector<edge>>
     }
 #endif
 
-  return make_tuple(max_gid + 1, train_edges, test_edges);
+  return make_tuple(max_gid + 1, train_edges, test_edges, num_test_edges);
 }
 
 tuple<vector<vector<uint32_t>>, vector<double>, double>
