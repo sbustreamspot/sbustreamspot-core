@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <chrono>
@@ -44,13 +45,10 @@ void test_anomalies(uint32_t num_graphs,
                       hash_tables);
 
 void print_usage() {
-  cout << "USAGE: ./swoosh <edge file> <chunk length>\n";
+  cout << "USAGE: ./swoosh <edge file> <chunk length> <parallelism>\n";
 }
 
 int main(int argc, char *argv[]) {
-  vector<edge> edges;                            // edge list
-  vector<graph> graphs;                          // graph list
-
   vector<vector<uint64_t>> H(L);                 // Universal family H, contains
                                                  // L hash functions, each
                                                  // represented by chunk_length+2
@@ -59,14 +57,8 @@ int main(int argc, char *argv[]) {
   mt19937_64 prng(SEED);                         // Mersenne Twister 64-bit PRNG
   bernoulli_distribution bernoulli(0.5);         // to generate random vectors
   vector<vector<int>> random_vectors(L);         // |S|-element random vectors
-  vector<bitset<L>> simhash_sketches;
-  vector<bitset<L>> streamhash_sketches;
-  vector<vector<int>> streamhash_projections;
-
-  vector<shingle_vector> shingle_vectors;        // |S|-element shingle vectors
   unordered_map<string,uint32_t> shingle_id;
   unordered_set<string> unique_shingles;
-
   //vector<unordered_map<bitset<R>,vector<uint32_t>>> hash_tables(B);
 
   // for timing
@@ -74,43 +66,344 @@ int main(int argc, char *argv[]) {
   chrono::time_point<chrono::steady_clock> end;
   chrono::microseconds diff;
 
-  if (argc != 3) {
+  // arguments
+  if (argc != 5) {
     print_usage();
     return -1;
   }
 
-  // arguments
   string edge_file(argv[1]);
   uint32_t chunk_length = atoi(argv[2]);
-  cout << "Executing with chunk length: " << chunk_length << endl;
-  
+  string bootstrap_file(argv[3]);
+  uint32_t par = atoi(argv[4]);
+
   // FIXME: Tailored for this configuration now
   assert(K == 1 && chunk_length >= 4);
 
-  allocate_random_bits(H, prng, chunk_length);
-  uint32_t num_graphs = read_edges(edge_file, edges);
+  // read bootstrap clusters and thresholds
+  vector<vector<uint32_t>> clusters;
+  vector<double> cluster_thresholds;
+  vector<int> cluster_map(600, UNSEEN); // gid -> cluster id
+  double global_threshold;
 
-  // add edges to graphs
-  cout << "Constructing " << num_graphs << " graphs ";
-  cout << "and StreamHash sketches: " << endl;
-
-  graphs.resize(num_graphs);
-  streamhash_sketches.resize(num_graphs);
-  streamhash_projections = vector<vector<int>>(num_graphs,
-                                               vector<int>(L,0));
-
-  start = chrono::steady_clock::now();
-  for (uint32_t i = 0; i < edges.size(); i++) {
-    update_graphs(edges[i], graphs);
-    update_streamhash_sketches(edges[i], graphs, streamhash_sketches,
-                               streamhash_projections, chunk_length, H);
+  tie(clusters, cluster_thresholds, global_threshold) =
+    read_bootstrap_clusters(bootstrap_file);
+  unordered_set<uint32_t> train_gids;
+  uint32_t nclusters = clusters.size();
+  vector<uint32_t> cluster_sizes(nclusters);
+  for (uint32_t i = 0; i < nclusters; i++) {
+    cluster_sizes[i] = clusters[i].size();
+    for (auto& gid : clusters[i]) {
+      train_gids.insert(gid);
+      cluster_map[gid] = i;
+    }
   }
-  end = chrono::steady_clock::now();
-  diff = chrono::duration_cast<chrono::microseconds>(end - start);
-  cout << "\tGraph + StreamHash sketch update (per-edge): ";
-  cout << static_cast<double>(diff.count())/edges.size() << "us" << endl;
 
-  cout << "Constructing shingle vectors:" << endl;
+  cout << "Executing with chunk length: " << chunk_length << endl;
+
+  uint32_t num_graphs;
+  vector<edge> train_edges;
+  unordered_map<uint32_t,vector<edge>> test_edges;
+  uint32_t num_test_edges;
+  tie(num_graphs, train_edges, test_edges, num_test_edges) =
+    read_edges(edge_file, train_gids);
+
+#ifdef DEBUG
+  for (auto& e : train_edges) {
+    assert(train_gids.find(get<5>(e)) != train_gids.end());
+  }
+#endif
+
+  // make groups of size par (parallel flowing graphs)
+  vector<uint32_t> test_gids;
+  for (uint32_t i = 0; i < num_graphs; i++) {
+    if (train_gids.find(i) == train_gids.end()) {
+      test_gids.push_back(i);
+    }
+  }
+  shuffle(test_gids.begin(), test_gids.end(), prng);
+
+  vector<vector<uint32_t>> groups;
+  for (uint32_t i = 0; i < test_gids.size(); i += par) {
+    vector<uint32_t> group;
+
+    uint32_t end_limit;
+    if (test_gids.size() - i < par) {
+      end_limit = test_gids.size() - i;
+    } else {
+      end_limit = par;
+    }
+
+    for (uint32_t j = 0; j < end_limit; j++) {
+      group.push_back(test_gids[i + j]);
+    }
+
+    groups.push_back(group);
+  }
+
+#ifdef DEBUG
+  for (auto& group : groups) {
+    for (auto& g : group) {
+      cout << g << " ";
+    }
+    cout << endl;
+  }
+#endif
+
+  // per-graph data structures
+  vector<graph> graphs(num_graphs);
+  vector<bitset<L>> streamhash_sketches(num_graphs);
+  vector<vector<int>> streamhash_projections(num_graphs, vector<int>(L, 0));
+  vector<bitset<L>> simhash_sketches(num_graphs);
+  vector<shingle_vector> shingle_vectors(num_graphs);
+
+  // construct bootstrap graphs offline
+  cout << "Constructing " << train_gids.size() << " training graphs:" << endl;
+  for (auto& e : train_edges) {
+    update_graphs(e, graphs);
+  }
+
+  // set up universal hash family for StreamHash
+  allocate_random_bits(H, prng, chunk_length);
+
+  // construct StreamHash sketches for bootstrap graphs offline
+  cout << "Constructing StreamHash sketches for training graphs:" << endl;
+  for (auto& gid : train_gids) {
+    unordered_map<string,uint32_t> temp_shingle_vector =
+      construct_temp_shingle_vector(graphs[gid], chunk_length);
+    tie(streamhash_sketches[gid], streamhash_projections[gid]) =
+      construct_streamhash_sketch(temp_shingle_vector, H);
+  }
+
+#ifdef DEBUG
+  // StreamHash similarity has been verified to be accurate for C=50
+  for (auto& gid1 : train_gids) {
+    for (auto& gid2 : train_gids) {
+      cout << gid1 << "\t" << gid2 << "\t";
+      cout << cos(PI*(1.0 - streamhash_similarity(streamhash_sketches[gid1],
+                                                  streamhash_sketches[gid2])));
+      cout << endl;
+    }
+  }
+#endif
+
+  // per-cluster data structures
+  vector<vector<double>> centroid_projections;
+  vector<bitset<L>> centroid_sketches;
+
+  // construct cluster centroid sketches/projections
+  cout << "Constructing bootstrap cluster centroids:" << endl;
+  tie(centroid_sketches, centroid_projections) =
+    construct_centroid_sketches(streamhash_projections, clusters, nclusters);
+
+  // compute distances of training graphs to their cluster centroids
+  vector<double> anomaly_scores(num_graphs, UNSEEN);
+  for (auto& gid : train_gids) {
+    // anomaly score is a "distance", hence the 1.0 - x
+    anomaly_scores[gid] = 1.0 -
+      cos(PI*(1.0 - streamhash_similarity(streamhash_sketches[gid],
+                                          centroid_sketches[cluster_map[gid]])));
+  }
+
+#ifdef DEBUG
+  for (auto& s : anomaly_scores) {
+    cout << s << " ";
+  }
+  cout << endl;
+  for (auto& s : cluster_map) {
+    cout << s << " ";
+  }
+  cout << endl;
+#endif
+
+  // add test edges to graphs
+  cout << "Streaming in " << num_test_edges << " test edges:" << endl;
+  vector<chrono::microseconds> graph_update_times(num_test_edges,
+                                                  chrono::microseconds(0));
+  vector<chrono::microseconds> sketch_update_times(num_test_edges,
+                                                   chrono::microseconds(0));
+  vector<chrono::microseconds> shingle_construction_times(num_test_edges,
+                                                          chrono::microseconds(0));
+  vector<chrono::microseconds> cluster_update_times(num_test_edges,
+                                                    chrono::microseconds(0));
+  uint32_t num_intervals = ceil(static_cast<double>(num_test_edges) /
+                                CLUSTER_UPDATE_INTERVAL);
+  if (num_intervals == 0)
+    num_intervals = 1; // if interval length is too long
+  vector<vector<double>> anomaly_score_iterations(num_intervals,
+                                                  vector<double>(num_graphs));
+  vector<vector<int>> cluster_map_iterations(num_intervals,
+                                             vector<int>(num_graphs));
+  uint32_t edge_num = 0;
+  for (auto& group : groups) {
+
+#ifdef DEBUG
+    cout << "Streaming group: ";
+    for (auto& g : group)
+      cout << g << " ";
+    cout << endl;
+#endif
+
+    unordered_map<uint32_t,uint32_t> edge_offset;
+    for (auto &g : group)
+      edge_offset[g] = 0;
+
+    vector<uint32_t> group_copy(group);
+    while (group_copy.size() > 0) {
+      // used to pick a random graph
+      uniform_int_distribution<uint32_t> rand_group_idx(0,
+                                                        group_copy.size() - 1);
+
+      uint32_t gidx = rand_group_idx(prng);
+      uint32_t gid = group_copy[gidx];
+      uint32_t off = edge_offset[gid];
+
+#ifdef DEBUG
+      cout << "\tStreaming graph " << gid << " offset " << off << endl;
+#endif
+
+      auto& e = test_edges[gid][off];
+
+      //
+      // PROCESS EDGE
+      //
+
+      // update graph
+      start = chrono::steady_clock::now();
+      update_graphs(e, graphs);
+      end = chrono::steady_clock::now();
+      diff = chrono::duration_cast<chrono::microseconds>(end - start);
+      graph_update_times[edge_num] = diff;
+
+      // update sketches
+      chrono::microseconds shingle_construction_time;
+      chrono::microseconds sketch_update_time;
+      vector<int> projection_delta;
+      tie(projection_delta, shingle_construction_time, sketch_update_time) =
+        update_streamhash_sketches(e, graphs, streamhash_sketches,
+                                   streamhash_projections, chunk_length, H);
+      sketch_update_times[edge_num] = sketch_update_time;
+      shingle_construction_times[edge_num] = shingle_construction_time;
+
+      // update centroids and centroid-graph distances
+      start = chrono::steady_clock::now();
+      update_distances_and_clusters(gid, projection_delta,
+                                    streamhash_sketches,
+                                    streamhash_projections,
+                                    centroid_sketches, centroid_projections,
+                                    cluster_sizes, cluster_map,
+                                    anomaly_scores, global_threshold);
+      end = chrono::steady_clock::now();
+      diff = chrono::duration_cast<chrono::microseconds>(end - start);
+      cluster_update_times[edge_num] = diff;
+
+      // store current anomaly scores and cluster assignments
+      if (edge_num % CLUSTER_UPDATE_INTERVAL == 0 ||
+          edge_num == num_test_edges - 1) {
+        anomaly_score_iterations[edge_num/CLUSTER_UPDATE_INTERVAL] = anomaly_scores;
+        cluster_map_iterations[edge_num/CLUSTER_UPDATE_INTERVAL] = cluster_map;
+      }
+
+      edge_num++;
+
+#ifdef DEBUG
+      chrono::microseconds last_graph_update_time =
+        graph_update_times[graph_update_times.size() - 1];
+      chrono::microseconds last_sketch_update_time =
+        sketch_update_times[sketch_update_times.size() - 1];
+      chrono::microseconds last_cluster_update_time =
+        cluster_update_times[cluster_update_times.size() - 1];
+      cout << "\tMost recent run times: ";
+      cout << static_cast<double>(last_graph_update_time.count()) << "us";
+      cout << " (graph), ";
+      cout << static_cast<double>(last_sketch_update_time.count()) << "us";
+      cout << " (sketch), ";
+      cout << static_cast<double>(last_cluster_update_time.count()) << "us";
+      cout << " (cluster)" << endl;
+#endif
+
+      edge_offset[gid]++; // increment next edge offset
+      if (edge_offset[gid] == test_edges[gid].size()) {
+        // out of edges for this gid
+        group_copy.erase(group_copy.begin() + gidx);
+#ifdef DEBUG
+        cout << "Erasing graph " << group[gidx] << endl;
+        cout << "New group: ";
+        for (auto& g : group_copy)
+          cout << g << " ";
+        cout << endl;
+#endif
+      }
+    }
+  }
+
+  chrono::microseconds mean_graph_update_time(0);
+  for (auto& t : graph_update_times) {
+    mean_graph_update_time += t;
+  }
+  mean_graph_update_time /= graph_update_times.size();
+
+  chrono::microseconds mean_sketch_update_time(0);
+  for (auto& t : sketch_update_times) {
+    mean_sketch_update_time += t;
+  }
+  mean_sketch_update_time /= sketch_update_times.size();
+
+  chrono::microseconds mean_shingle_construction_time(0);
+  for (auto& t : shingle_construction_times) {
+    mean_shingle_construction_time += t;
+  }
+  mean_shingle_construction_time /= shingle_construction_times.size();
+
+  chrono::microseconds mean_cluster_update_time(0);
+  for (auto& t : cluster_update_times) {
+    mean_cluster_update_time += t;
+  }
+  mean_cluster_update_time /= cluster_update_times.size();
+
+  cout << "Runtimes (per-edge):" << endl;
+  cout << "\tGraph update: ";
+  cout << static_cast<double>(mean_graph_update_time.count()) << "us" << endl;
+  cout << "\tShingle construction: ";
+  cout << static_cast<double>(mean_shingle_construction_time.count()) << "us" << endl;
+  cout << "\tSketch update: ";
+  cout << static_cast<double>(mean_sketch_update_time.count()) << "us" << endl;
+  cout << "\tCluster update: ";
+  cout << static_cast<double>(mean_cluster_update_time.count()) << "us" << endl;
+
+  cout << "Iterations " << num_intervals << endl;
+  for (uint32_t i = 0; i < num_intervals; i++) {
+    auto& a = anomaly_score_iterations[i];
+    auto& c = cluster_map_iterations[i];
+    for (uint32_t j = 0; j < a.size(); j++) {
+      cout << a[j] << " ";
+    }
+    cout << endl;
+    for (uint32_t j = 0; j < a.size(); j++) {
+      cout << c[j] << " ";
+    }
+    cout << endl;
+  }
+
+#ifdef DEBUG
+  for (uint32_t i = 0; i < num_graphs; i++) {
+    cout << "Graph projection " << i << ": ";
+    for (uint32_t j = 0; j < 10; j++) {
+      cout << streamhash_projections[i][j] << " ";
+    }
+    cout << endl;
+  }
+
+  for (uint32_t i = 0; i < centroid_projections.size(); i++) {
+    cout << "Centroid projection " << i << ": ";
+    for (uint32_t j = 0; j < 10; j++) {
+      cout << centroid_projections[i][j] << " ";
+    }
+    cout << endl;
+  }
+#endif
+
+  /*cout << "Constructing shingle vectors:" << endl;
   start = chrono::steady_clock::now();
   construct_shingle_vectors(shingle_vectors, shingle_id, graphs,
                             chunk_length);
@@ -126,7 +419,7 @@ int main(int argc, char *argv[]) {
                              simhash_sketches);
 
   cout << "Computing pairwise similarities:" << endl;
-  compute_similarities(shingle_vectors, simhash_sketches, streamhash_sketches);
+  compute_similarities(shingle_vectors, simhash_sketches, streamhash_sketches);*/
 
   /*// label attack/normal graph id's
   vector<uint32_t> normal_gids;
@@ -199,8 +492,8 @@ void compute_similarities(const vector<shingle_vector>& shingle_vectors,
       cout << i << "\t" << j << "\t";
       cout << cosine;
       cout << "\t" << angsim;
-      cout << "\t" << simhash_sim;
-      cout << "\t" << streamhash_sim;
+      cout << "\t" << simhash_sim << "," << cos(PI*(1.0 - simhash_sim)) << " ";
+      cout << "\t" << streamhash_sim << "," << cos(PI*(1.0 - streamhash_sim)) << " ";
       cout << "\t" << (streamhash_sim - angsim);
       cout << endl;
     }
@@ -235,7 +528,6 @@ void construct_simhash_sketches(const vector<shingle_vector>& shingle_vectors,
                                 const vector<vector<int>>& random_vectors,
                                 vector<bitset<L>>& simhash_sketches) {
   // compute SimHash sketches
-  simhash_sketches.resize(shingle_vectors.size());
   for (uint32_t i = 0; i < simhash_sketches.size(); i++) {
     construct_simhash_sketch(simhash_sketches[i], shingle_vectors[i],
                              random_vectors);

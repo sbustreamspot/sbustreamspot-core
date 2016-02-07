@@ -55,13 +55,18 @@ def bootstrap_clusters(similarity_file, nclusters, train_fraction):
                                              iteration=20, verbose=0)
 
     threshold = {}
+    all_cdists = []
     for center, gids in meds.itervalues():
         cdists = [all_dists[center][g] for g in gids]
+        all_cdists.extend(cdists)
         mean_dist = np.mean(cdists)
         std_dist = np.std(cdists)
-        threshold[center] = mean_dist + 4.355 * std_dist # P(>) <= 5%
+        threshold[center] = mean_dist + 3. * std_dist # P(>) <= 10%
+    mean_all_cdists = np.mean(all_cdists)
+    std_all_cdists = np.std(all_cdists)
+    global_threshold = mean_all_cdists + 3. * std_all_cdists
 
-    print nclusters
+    print str(nclusters) + '\t' + "{:3.4f}".format(global_threshold) 
     for center, gids in meds.itervalues():
         print "{:3.4f}".format(threshold[center]) + '\t',
         print '\t'.join([str(g) for g in gids])
