@@ -36,7 +36,8 @@ void update_distances_and_clusters(uint32_t gid,
                                    vector<uint32_t>& cluster_sizes,
                                    vector<int>& cluster_map,
                                    vector<double>& anomaly_scores,
-                                   double anomaly_threshold);
+                                   double anomaly_threshold,
+                                   const vector<double>& cluster_thresholds);
 
 }
 

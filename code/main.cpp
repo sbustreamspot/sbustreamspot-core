@@ -292,7 +292,8 @@ int main(int argc, char *argv[]) {
                                     streamhash_projections,
                                     centroid_sketches, centroid_projections,
                                     cluster_sizes, cluster_map,
-                                    anomaly_scores, global_threshold);
+                                    anomaly_scores, global_threshold,
+                                    cluster_thresholds);
       end = chrono::steady_clock::now();
       diff = chrono::duration_cast<chrono::microseconds>(end - start);
       cluster_update_times[edge_num] = diff;

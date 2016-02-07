@@ -103,7 +103,8 @@ void update_distances_and_clusters(uint32_t gid,
                                    vector<uint32_t>& cluster_sizes,
                                    vector<int>& cluster_map,
                                    vector<double>& anomaly_scores,
-                                   double anomaly_threshold) {
+                                   double anomaly_threshold,
+                                   const vector<double>& cluster_thresholds) {
   // calculate distance of graph to all cluster centroids
   uint32_t nclusters = cluster_sizes.size();
   vector<double> distances(nclusters);
@@ -137,7 +138,8 @@ void update_distances_and_clusters(uint32_t gid,
 #endif
 
   // if distance > threshold: outlier
-  if (min_distance > anomaly_threshold) {
+  if (min_distance > min(anomaly_threshold,
+                         cluster_thresholds[nearest_cluster])) {
     // change cluster mapping to ANOMALY
     cluster_map[gid] = ANOMALY;
 

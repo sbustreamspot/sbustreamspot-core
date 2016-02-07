@@ -15,7 +15,7 @@ NORMAL_GIDS = set(range(0,300) + range(400,600))
 random.seed(SEED)
 np.random.seed(SEED)
 
-def get_train_test_ids(pct_train):
+def get_train_test_ids(pct_train, outliers):
     num_graphs_train = int(pct_train * NUM_SCENARIO_GRAPHS) 
     train_ids = []
     test_ids = []
@@ -29,6 +29,8 @@ def get_train_test_ids(pct_train):
         train_ids.extend(train_gids)
         test_ids.extend(test_gids)
 
+    train_gids = [g for g in train_gids if g not in outliers]
+    test_gids = [g for g in test_gids if g not in outliers]
     test_ids.extend(ATTACK_GIDS)
     return train_ids, test_ids
 
@@ -45,10 +47,24 @@ def bootstrap_clusters(similarity_file, nclusters, train_fraction):
             g1 = int(fields[0])
             g2 = int(fields[1])
             sim = float(fields[2])
+
             all_dists[g1][g2] = 1.0 - sim
             all_dists[g2][g1] = 1.0 - sim
 
-    train_gids, test_gids = get_train_test_ids(train_fraction)
+    outliers = set([])
+    for g1 in points:
+        dists = []
+        class_g1 = g1/100
+        for g2 in points:
+            class_g2 = g2/100
+            if class_g1 != class_g1:
+                continue
+            dists.append(all_dists[g1][g2])
+        mean_dist = np.mean(dists)
+        if mean_dist > 0.8:
+            outliers.add(g1)
+
+    train_gids, test_gids = get_train_test_ids(train_fraction, outliers)
 
     diam, meds = medoids.k_medoids_iterspawn(train_gids, spawn=5,
                                              k=nclusters, dists=all_dists,
