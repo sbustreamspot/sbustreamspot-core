@@ -10,7 +10,7 @@
 #define R                 20
 #define BUF_SIZE          50
 #define DELIMITER         '\t'
-#define L                 2000       // must be = B * R
+#define L                 1000       // must be = B * R
 #define SMAX              50
 #define SEED              23
 #define CLUSTER_UPDATE_INTERVAL   10000
