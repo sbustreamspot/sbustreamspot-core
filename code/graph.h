@@ -28,6 +28,7 @@ typedef unordered_map<pair<uint32_t,char>,
 typedef vector<uint32_t> shingle_vector;
 
 void update_graphs(edge& e, vector<graph>& graphs);
+void remove_from_graph(edge& e, vector<graph>& graphs);
 void print_edge(edge& e);
 void print_graph(graph& g);
 unordered_map<string,uint32_t>

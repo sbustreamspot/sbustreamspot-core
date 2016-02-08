@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <chrono>
@@ -27,6 +28,47 @@ void update_graphs(edge& e, vector<graph>& graphs) {
                         src_type)].push_back(make_tuple(dst_id,
                                                         dst_type,
                                                         e_type));
+}
+
+void remove_from_graph(edge& e, vector<graph>& graphs) {
+  auto& src_id = get<F_S>(e);
+  auto& src_type = get<F_STYPE>(e);
+  auto& dst_id = get<F_D>(e);
+  auto& dst_type = get<F_DTYPE>(e);
+  auto& e_type = get<F_ETYPE>(e);
+  auto& gid = get<F_GID>(e);
+
+#ifdef DEBUG
+  cout << "Removing edge: ";
+  cout << src_id << " ";
+  cout << src_type << " ";
+  cout << dst_id << " ";
+  cout << dst_type << " ";
+  cout << e_type << " ";
+  cout << gid << endl;
+#endif
+
+  // append edge to the edge list for the source
+  auto& g = graphs[gid];
+  auto node = make_pair(src_id, src_type);
+  auto dest = make_tuple(dst_id, dst_type, e_type);
+  auto& edge_list = g.at(node);
+
+#ifdef DEBUG
+  cout << "\tEdges from source: ";
+  for (auto& x : edge_list)
+    cout << get<0>(x) << " ";
+  cout << endl;
+#endif
+
+  if (edge_list.size() == 1) {
+    // the last edge from this node is being removed
+    g.erase(node);
+  } else {
+    // there are other edges from this node
+    auto pos = find(edge_list.begin(), edge_list.end(), dest);
+    edge_list.erase(pos);
+  }
 }
 
 unordered_map<string,uint32_t>

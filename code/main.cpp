@@ -2,6 +2,7 @@
 #include <bitset>
 #include <cassert>
 #include <chrono>
+#include <deque>
 #include <iostream>
 #include <queue>
 #include <random>
@@ -45,7 +46,7 @@ void test_anomalies(uint32_t num_graphs,
                       hash_tables);
 
 void print_usage() {
-  cout << "USAGE: ./swoosh <edge file> <chunk length> <parallelism>\n";
+  cout << "USAGE: ./swoosh <edge file> <chunk length> <parallelism> [max num edges]\n";
 }
 
 int main(int argc, char *argv[]) {
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
   chrono::microseconds diff;
 
   // arguments
-  if (argc != 5) {
+  if (argc < 5) {
     print_usage();
     return -1;
   }
@@ -76,6 +77,12 @@ int main(int argc, char *argv[]) {
   uint32_t chunk_length = atoi(argv[2]);
   string bootstrap_file(argv[3]);
   uint32_t par = atoi(argv[4]);
+
+  double max_num_edges = 1.0;
+  if (argc == 6) {
+    max_num_edges = atof(argv[5]);
+  }
+  assert(max_num_edges >= 0.0 && max_num_edges <= 1.0);
 
   // FIXME: Tailored for this configuration now
   assert(K == 1 && chunk_length >= 4);
@@ -99,7 +106,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  cout << "Executing with chunk length: " << chunk_length << endl;
+  cout << "Executing with chunk length: " << chunk_length;
+  cout << " L: " << L;
+  cout << " max edges: " << max_num_edges * 100.0 << "%";
+  cout << " par: " << par << endl;
 
   uint32_t num_graphs;
   vector<edge> train_edges;
@@ -234,6 +244,10 @@ int main(int argc, char *argv[]) {
                                                   vector<double>(num_graphs));
   vector<vector<int>> cluster_map_iterations(num_intervals,
                                              vector<int>(num_graphs));
+
+  uint32_t cache_size = max_num_edges * num_test_edges;
+  deque<edge> cache;
+
   uint32_t edge_num = 0;
   for (auto& group : groups) {
 
@@ -267,6 +281,14 @@ int main(int argc, char *argv[]) {
       //
       // PROCESS EDGE
       //
+
+      // check if cache is full
+      if (cache.size() == cache_size) {
+        auto& edge_to_evict = cache.front(); // oldest edge at head
+        remove_from_graph(edge_to_evict, graphs);
+        cache.pop_front();
+      }
+      cache.push_back(e); // newest edge at tail
 
       // update graph
       start = chrono::steady_clock::now();
@@ -371,6 +393,17 @@ int main(int argc, char *argv[]) {
   cout << static_cast<double>(mean_sketch_update_time.count()) << "us" << endl;
   cout << "\tCluster update: ";
   cout << static_cast<double>(mean_cluster_update_time.count()) << "us" << endl;
+
+  // print size of each test graph in memory
+  cout << "Test graph sizes: " << endl;
+  for (auto& gid : test_gids) {
+    uint32_t size = 0;
+    for (auto& kv : graphs[gid]) {
+      size += kv.second.size();
+    }
+    cout << gid << "," << size << " ";
+  }
+  cout << endl;
 
   cout << "Iterations " << num_intervals << endl;
   for (uint32_t i = 0; i < num_intervals; i++) {
