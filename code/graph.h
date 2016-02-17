@@ -36,7 +36,7 @@ unordered_map<string,uint32_t>
 void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
                                vector<graph>& graphs, uint32_t chunk_length);
-tuple<vector<int>, chrono::microseconds, chrono::microseconds>
+tuple<vector<int>, chrono::nanoseconds, chrono::nanoseconds>
 update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
                            vector<bitset<L>>& streamhash_sketches,
                            vector<vector<int>>& streamhash_projections,

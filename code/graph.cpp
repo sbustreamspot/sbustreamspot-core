@@ -253,7 +253,7 @@ void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
 //    - Last chunk length > 2
 //      Hash and add last chunk
 //      Hash and remove last chunk - "et"
-tuple<vector<int>, chrono::microseconds, chrono::microseconds>
+tuple<vector<int>, chrono::nanoseconds, chrono::nanoseconds>
 update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
                            vector<bitset<L>>& streamhash_sketches,
                            vector<vector<int>>& streamhash_projections,
