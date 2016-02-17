@@ -46,7 +46,8 @@ void test_anomalies(uint32_t num_graphs,
                       hash_tables);
 
 void print_usage() {
-  cout << "USAGE: ./swoosh <edge file> <chunk length> <parallelism> [max num edges]\n";
+  cout << "USAGE: ./swoosh <edge file> <chunk length> <bootstrap file> <parallelism>";
+  cout << " <max frac edges> <scenario>" << endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -65,10 +66,10 @@ int main(int argc, char *argv[]) {
   // for timing
   chrono::time_point<chrono::steady_clock> start;
   chrono::time_point<chrono::steady_clock> end;
-  chrono::microseconds diff;
+  chrono::nanoseconds diff;
 
   // arguments
-  if (argc < 5) {
+  if (argc != 7) {
     print_usage();
     return -1;
   }
@@ -77,12 +78,28 @@ int main(int argc, char *argv[]) {
   uint32_t chunk_length = atoi(argv[2]);
   string bootstrap_file(argv[3]);
   uint32_t par = atoi(argv[4]);
+  uint32_t max_num_edges = atoi(argv[5]);
+  string dataset(argv[6]);
 
-  double max_num_edges = 1.0;
-  if (argc == 6) {
-    max_num_edges = atof(argv[5]);
+  unordered_set<uint32_t> scenarios;
+  if (dataset.compare("dcf") == 0) {
+    scenarios.insert(1);
+    scenarios.insert(2);
+    scenarios.insert(5);
+    scenarios.insert(3); // attack
+  } else if (dataset.compare("ygf") == 0) {
+    scenarios.insert(0);
+    scenarios.insert(4);
+    scenarios.insert(5);
+    scenarios.insert(3); // attack
+  } else {
+    scenarios.insert(0);
+    scenarios.insert(1);
+    scenarios.insert(2);
+    scenarios.insert(3);
+    scenarios.insert(4);
+    scenarios.insert(5);
   }
-  assert(max_num_edges >= 0.0 && max_num_edges <= 1.0);
 
   // FIXME: Tailored for this configuration now
   assert(K == 1 && chunk_length >= 4);
@@ -108,15 +125,16 @@ int main(int argc, char *argv[]) {
 
   cout << "Executing with chunk length: " << chunk_length;
   cout << " L: " << L;
-  cout << " max edges: " << max_num_edges * 100.0 << "%";
-  cout << " par: " << par << endl;
+  cout << " max edges: " << max_num_edges;
+  cout << " par: " << par;
+  cout << " data: " << dataset << endl;
 
   uint32_t num_graphs;
   vector<edge> train_edges;
   unordered_map<uint32_t,vector<edge>> test_edges;
   uint32_t num_test_edges;
   tie(num_graphs, train_edges, test_edges, num_test_edges) =
-    read_edges(edge_file, train_gids);
+    read_edges(edge_file, train_gids, scenarios);
 
 #ifdef DEBUG
   for (auto& e : train_edges) {
@@ -127,6 +145,9 @@ int main(int argc, char *argv[]) {
   // make groups of size par (parallel flowing graphs)
   vector<uint32_t> test_gids;
   for (uint32_t i = 0; i < num_graphs; i++) {
+    if (scenarios.find(i/100) == scenarios.end()) {
+      continue;
+    }
     if (train_gids.find(i) == train_gids.end()) {
       test_gids.push_back(i);
     }
@@ -228,14 +249,14 @@ int main(int argc, char *argv[]) {
 
   // add test edges to graphs
   cout << "Streaming in " << num_test_edges << " test edges:" << endl;
-  vector<chrono::microseconds> graph_update_times(num_test_edges,
-                                                  chrono::microseconds(0));
-  vector<chrono::microseconds> sketch_update_times(num_test_edges,
-                                                   chrono::microseconds(0));
-  vector<chrono::microseconds> shingle_construction_times(num_test_edges,
-                                                          chrono::microseconds(0));
-  vector<chrono::microseconds> cluster_update_times(num_test_edges,
-                                                    chrono::microseconds(0));
+  vector<chrono::nanoseconds> graph_update_times(num_test_edges,
+                                                  chrono::nanoseconds(0));
+  vector<chrono::nanoseconds> sketch_update_times(num_test_edges,
+                                                   chrono::nanoseconds(0));
+  vector<chrono::nanoseconds> shingle_construction_times(num_test_edges,
+                                                          chrono::nanoseconds(0));
+  vector<chrono::nanoseconds> cluster_update_times(num_test_edges,
+                                                    chrono::nanoseconds(0));
   uint32_t num_intervals = ceil(static_cast<double>(num_test_edges) /
                                 CLUSTER_UPDATE_INTERVAL);
   if (num_intervals == 0)
@@ -245,7 +266,7 @@ int main(int argc, char *argv[]) {
   vector<vector<int>> cluster_map_iterations(num_intervals,
                                              vector<int>(num_graphs));
 
-  uint32_t cache_size = max_num_edges * num_test_edges;
+  uint32_t cache_size = max_num_edges;
   deque<edge> cache;
 
   uint32_t edge_num = 0;
@@ -294,12 +315,12 @@ int main(int argc, char *argv[]) {
       start = chrono::steady_clock::now();
       update_graphs(e, graphs);
       end = chrono::steady_clock::now();
-      diff = chrono::duration_cast<chrono::microseconds>(end - start);
+      diff = chrono::duration_cast<chrono::nanoseconds>(end - start);
       graph_update_times[edge_num] = diff;
 
       // update sketches
-      chrono::microseconds shingle_construction_time;
-      chrono::microseconds sketch_update_time;
+      chrono::nanoseconds shingle_construction_time;
+      chrono::nanoseconds sketch_update_time;
       vector<int> projection_delta;
       tie(projection_delta, shingle_construction_time, sketch_update_time) =
         update_streamhash_sketches(e, graphs, streamhash_sketches,
@@ -317,7 +338,7 @@ int main(int argc, char *argv[]) {
                                     anomaly_scores, global_threshold,
                                     cluster_thresholds);
       end = chrono::steady_clock::now();
-      diff = chrono::duration_cast<chrono::microseconds>(end - start);
+      diff = chrono::duration_cast<chrono::nanoseconds>(end - start);
       cluster_update_times[edge_num] = diff;
 
       // store current anomaly scores and cluster assignments
@@ -330,11 +351,11 @@ int main(int argc, char *argv[]) {
       edge_num++;
 
 #ifdef DEBUG
-      chrono::microseconds last_graph_update_time =
+      chrono::nanoseconds last_graph_update_time =
         graph_update_times[graph_update_times.size() - 1];
-      chrono::microseconds last_sketch_update_time =
+      chrono::nanoseconds last_sketch_update_time =
         sketch_update_times[sketch_update_times.size() - 1];
-      chrono::microseconds last_cluster_update_time =
+      chrono::nanoseconds last_cluster_update_time =
         cluster_update_times[cluster_update_times.size() - 1];
       cout << "\tMost recent run times: ";
       cout << static_cast<double>(last_graph_update_time.count()) << "us";
@@ -360,25 +381,25 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  chrono::microseconds mean_graph_update_time(0);
+  chrono::nanoseconds mean_graph_update_time(0);
   for (auto& t : graph_update_times) {
     mean_graph_update_time += t;
   }
   mean_graph_update_time /= graph_update_times.size();
 
-  chrono::microseconds mean_sketch_update_time(0);
+  chrono::nanoseconds mean_sketch_update_time(0);
   for (auto& t : sketch_update_times) {
     mean_sketch_update_time += t;
   }
   mean_sketch_update_time /= sketch_update_times.size();
 
-  chrono::microseconds mean_shingle_construction_time(0);
+  chrono::nanoseconds mean_shingle_construction_time(0);
   for (auto& t : shingle_construction_times) {
     mean_shingle_construction_time += t;
   }
   mean_shingle_construction_time /= shingle_construction_times.size();
 
-  chrono::microseconds mean_cluster_update_time(0);
+  chrono::nanoseconds mean_cluster_update_time(0);
   for (auto& t : cluster_update_times) {
     mean_cluster_update_time += t;
   }
@@ -442,7 +463,7 @@ int main(int argc, char *argv[]) {
   construct_shingle_vectors(shingle_vectors, shingle_id, graphs,
                             chunk_length);
   end = chrono::steady_clock::now();
-  diff = chrono::duration_cast<chrono::microseconds>(end - start);
+  diff = chrono::duration_cast<chrono::nanoseconds>(end - start);
   cout << "\tShingle vector construction (per-graph): ";
   cout << static_cast<double>(diff.count())/num_graphs << "us" << endl;
 
@@ -453,9 +474,9 @@ int main(int argc, char *argv[]) {
                              simhash_sketches);
 
   cout << "Computing pairwise similarities:" << endl;
-  compute_similarities(shingle_vectors, simhash_sketches, streamhash_sketches);*/
+  compute_similarities(shingle_vectors, simhash_sketches, streamhash_sketches);
 
-  /*// label attack/normal graph id's
+  // label attack/normal graph id's
   vector<uint32_t> normal_gids;
   vector<uint32_t> attack_gids;
   if (num_graphs == 600) { // UIC data hack
