@@ -1,3 +1,8 @@
+/* 
+ * Copyright 2016 Emaad Ahmed Manzoor
+ * License: Apache License, Version 2.0
+ */
+
 #ifndef STREAMSPOT_SIMHASH_H_
 #define STREAMSPOT_SIMHASH_H_
 
