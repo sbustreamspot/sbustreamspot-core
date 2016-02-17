@@ -16,13 +16,16 @@
 namespace std {
 
 tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
-  read_edges(string filename, const unordered_set<uint32_t>& train_gids) {
+  read_edges(string filename, const unordered_set<uint32_t>& train_gids,
+             const unordered_set<uint32_t>& scenarios) {
   // read edges into memory
   cout << "Reading edges from: " << filename << endl;
 
   vector<edge> train_edges;
   unordered_map<uint32_t,vector<edge>> test_edges;
   uint32_t num_test_edges = 0;
+  uint32_t num_dropped_edges = 0;
+  uint32_t num_train_edges = 0;
 
   // get file size
   struct stat fstatbuf;
@@ -37,6 +40,7 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   if (data < 0) { // mmap failed
     panic("mmap'ing graph file failed");
     close(fd);
+    exit(-1);
   }
 
   // read edges from the file
@@ -84,16 +88,22 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
 
     i++; // skip newline
 
-    // add an edge to memory
-    if (train_gids.find(graph_id) != train_gids.end()) {
-      train_edges.push_back(make_tuple(src_id, src_type,
-                                       dst_id, dst_type,
-                                       e_type, graph_id));
+    uint32_t scenario = graph_id / 100;
+    if (scenarios.find(scenario) != scenarios.end()) {
+      // add an edge to memory
+      if (train_gids.find(graph_id) != train_gids.end()) {
+        train_edges.push_back(make_tuple(src_id, src_type,
+                                         dst_id, dst_type,
+                                         e_type, graph_id));
+        num_train_edges++;
+      } else {
+        test_edges[graph_id].push_back(make_tuple(src_id, src_type,
+                                                  dst_id, dst_type,
+                                                  e_type, graph_id));
+        num_test_edges++;
+      }
     } else {
-      test_edges[graph_id].push_back(make_tuple(src_id, src_type,
-                                                dst_id, dst_type,
-                                                e_type, graph_id));
-      num_test_edges++;
+      num_dropped_edges++;
     }
 
     line++;
@@ -102,11 +112,14 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   close(fd);
 
 #ifdef VERBOSE
-    for (uint32_t i = 0; i < edges.size(); i++) {
-      cout << "Edge " << i << ": ";
-      print_edge(edges[i]);
-      cout << endl;
-    }
+  for (uint32_t i = 0; i < edges.size(); i++) {
+    cout << "Edge " << i << ": ";
+    print_edge(edges[i]);
+    cout << endl;
+  }
+  cout << "Dropped edges: " << num_dropped_edges << endl;
+  cout << "Train edges: " << num_train_edges << endl;
+  cout << "Test edges: " << num_test_edges << endl;
 #endif
 
   return make_tuple(max_gid + 1, train_edges, test_edges, num_test_edges);
