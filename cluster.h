@@ -1,6 +1,7 @@
 /* 
  * Copyright 2016 Emaad Ahmed Manzoor
  * License: Apache License, Version 2.0
+ * http://www3.cs.stonybrook.edu/~emanzoor/streamspot/
  */
 
 #ifndef STREAMSPOT_CLUSTER_H_
