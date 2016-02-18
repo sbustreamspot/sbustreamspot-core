@@ -14,6 +14,10 @@ separate files:
      sample is provided as `test_bootstrap_clusters.txt`. Bootstrap clusters
      used for the experiments in the paper are available [here][2].
 
+The output will contain a summary of the execution parameters, runtime, and
+the graph cluster assignments and anomaly scores every 10,000 edges. This output
+can be further analyzed in various dimensions with [sbustreamspot-analyze][3].
+
 Compilation and execution has been tested with GCC 5.2.1 on Ubuntu 15.10.
 
 ## Quickstart
@@ -47,3 +51,4 @@ A few parameters are set at compile-time and can be found in `param.h`.
 
 [1]: https://github.com/sbustreamspot/sbustreamspot-data
 [2]: https://gist.github.com/emaadmanzoor/118846a642727a0bf704
+[3]: https://github.com/sbustreamspot/sbustreamspot-analyze
