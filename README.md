@@ -1,5 +1,7 @@
 # StreamSpot
 
+[http://www3.cs.stonybrook.edu/~emanzoor/streamspot/](http://www3.cs.stonybrook.edu/~emanzoor/streamspot/)
+
 This repository contains the core streaming heterogenous graph clustering
 and anomaly detection code.
 
