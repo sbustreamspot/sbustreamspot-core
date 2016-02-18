@@ -30,7 +30,7 @@ make clean optimized
              --dataset=all
 ```
 
-To run with a different dataset, change `test_edges.txt` and
+To use a different dataset, change `test_edges.txt` and
 `test_bootstrap_clusters.txt` accordingly.
 
 ## Parameters
