@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "cluster.h"
+#include "docopt.h"
 #include "graph.h"
 #include "hash.h"
 #include "io.h"
@@ -26,6 +27,28 @@
 #include "streamhash.h"
 
 using namespace std;
+
+static const char USAGE[] =
+R"(StreamSpot.
+
+    Usage:
+      streamspot --edges=<edge file>
+                 --bootstrap=<bootstrap clusters file>
+                 --chunk-length=<chunk length>
+                 --num-parallel-graphs=<num parallel graphs>
+                 [--max-num-edges=<max num edges>]
+                 [--dataset=<dataset>]
+
+      streamspot (-h | --help)
+
+    Options:
+      -h, --help                                         Show this screen.
+      --edges=<edge file>                                Incoming stream edges.
+      --bootstrap=<bootstrap clusters file>              Bootstrap clusters.
+      --chunk-length=<chunk length>                      Parameter C.
+      --max-num-edges=<max num edges>                    Parameter N [default: inf].
+      --dataset=<dataset>                                Dataset [default: all].
+)";
 
 void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&, uint32_t);
 void compute_similarities(const vector<shingle_vector>& shingle_vectors,
@@ -51,11 +74,6 @@ void test_anomalies(uint32_t num_graphs,
                     const vector<unordered_map<bitset<R>,vector<uint32_t>>>&
                       hash_tables);
 
-void print_usage() {
-  cout << "USAGE: ./swoosh <edge file> <chunk length> <bootstrap file> <parallelism>";
-  cout << " <max frac edges> <scenario>" << endl;
-}
-
 int main(int argc, char *argv[]) {
   vector<vector<uint64_t>> H(L);                 // Universal family H, contains
                                                  // L hash functions, each
@@ -75,30 +93,50 @@ int main(int argc, char *argv[]) {
   chrono::nanoseconds diff;
 
   // arguments
-  if (argc != 7) {
-    print_usage();
-    return -1;
+  map<string, docopt::value> args = docopt::docopt(USAGE, { argv + 1, argv + argc });
+
+  string edge_file(args["--edges"].asString());
+  string bootstrap_file(args["--bootstrap"].asString());
+  uint32_t chunk_length = args["--chunk-length"].asLong();
+  uint32_t par = args["--num-parallel-graphs"].asLong();
+
+  int max_num_edges = -1;
+  if (args.find("--max-num-edges") != args.end()) {
+    max_num_edges = args["--max-num-edges"].asLong();
   }
 
-  string edge_file(argv[1]);
-  uint32_t chunk_length = atoi(argv[2]);
-  string bootstrap_file(argv[3]);
-  uint32_t par = atoi(argv[4]);
-  uint32_t max_num_edges = atoi(argv[5]);
-  string dataset(argv[6]);
+  string dataset("all");
+  if (args.find("--dataset") != args.end()) {
+    dataset = args["--dataset"].asString();
+  }
+
+  if (!(dataset.compare("all") == 0 ||
+        dataset.compare("ydc") == 0 ||
+        dataset.compare("gfc") == 0)) {
+    cout << "Invalid dataset: " << dataset << ". ";
+    cout << "Should be 'all' | 'ydc' | 'gfc'." << endl;
+    exit(-1);
+  }
+
+  cout << "StreamSpot (";
+  cout << "C=" << chunk_length << ", ";
+  cout << "L=" << L << ", ";
+  cout << "N=" << max_num_edges << ", ";
+  cout << "P=" << par << ", ";
+  cout << "DATA=" << dataset << ")" << endl;
 
   unordered_set<uint32_t> scenarios;
-  if (dataset.compare("dcf") == 0) {
+  if (dataset.compare("gfc") == 0) {
     scenarios.insert(1);
     scenarios.insert(2);
     scenarios.insert(5);
     scenarios.insert(3); // attack
-  } else if (dataset.compare("ygf") == 0) {
+  } else if (dataset.compare("ydc") == 0) {
     scenarios.insert(0);
     scenarios.insert(4);
     scenarios.insert(5);
     scenarios.insert(3); // attack
-  } else {
+  } else { // all
     scenarios.insert(0);
     scenarios.insert(1);
     scenarios.insert(2);
@@ -129,18 +167,20 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  cout << "Executing with chunk length: " << chunk_length;
-  cout << " L: " << L;
-  cout << " max edges: " << max_num_edges;
-  cout << " par: " << par;
-  cout << " data: " << dataset << endl;
-
   uint32_t num_graphs;
   vector<edge> train_edges;
   unordered_map<uint32_t,vector<edge>> test_edges;
   uint32_t num_test_edges;
   tie(num_graphs, train_edges, test_edges, num_test_edges) =
     read_edges(edge_file, train_gids, scenarios);
+
+  if (num_graphs == 0) {
+    cout << "0 graphs for dataset: " << dataset << endl;
+    exit(-1);
+  } else if (num_test_edges == 0) {
+    cout << "0 test edges for dataset: " << dataset << endl;
+    exit(-1);
+  }
 
 #ifdef DEBUG
   for (auto& e : train_edges) {
@@ -256,13 +296,13 @@ int main(int argc, char *argv[]) {
   // add test edges to graphs
   cout << "Streaming in " << num_test_edges << " test edges:" << endl;
   vector<chrono::nanoseconds> graph_update_times(num_test_edges,
-                                                  chrono::nanoseconds(0));
+                                                 chrono::nanoseconds(0));
   vector<chrono::nanoseconds> sketch_update_times(num_test_edges,
-                                                   chrono::nanoseconds(0));
+                                                  chrono::nanoseconds(0));
   vector<chrono::nanoseconds> shingle_construction_times(num_test_edges,
-                                                          chrono::nanoseconds(0));
+                                                         chrono::nanoseconds(0));
   vector<chrono::nanoseconds> cluster_update_times(num_test_edges,
-                                                    chrono::nanoseconds(0));
+                                                   chrono::nanoseconds(0));
   uint32_t num_intervals = ceil(static_cast<double>(num_test_edges) /
                                 CLUSTER_UPDATE_INTERVAL);
   if (num_intervals == 0)
@@ -272,7 +312,10 @@ int main(int argc, char *argv[]) {
   vector<vector<int>> cluster_map_iterations(num_intervals,
                                              vector<int>(num_graphs));
 
-  uint32_t cache_size = max_num_edges;
+  uint32_t cache_size = num_test_edges;
+  if (max_num_edges > 0) {
+    cache_size = max_num_edges;
+  }
   deque<edge> cache;
 
   uint32_t edge_num = 0;
