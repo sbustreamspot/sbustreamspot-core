@@ -1,4 +1,4 @@
-# StreamSpot
+# StreamSpot Core
 
 <img src="http://www3.cs.stonybrook.edu/~emanzoor/streamspot/img/streamspot-logo.jpg" height="150" align="right"/>
 
