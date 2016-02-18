@@ -42,12 +42,12 @@ R"(StreamSpot.
       streamspot (-h | --help)
 
     Options:
-      -h, --help                                         Show this screen.
-      --edges=<edge file>                                Incoming stream edges.
-      --bootstrap=<bootstrap clusters file>              Bootstrap clusters.
-      --chunk-length=<chunk length>                      Parameter C.
-      --max-num-edges=<max num edges>                    Parameter N [default: inf].
-      --dataset=<dataset>                                Dataset [default: all].
+      -h, --help                              Show this screen.
+      --edges=<edge file>                     Incoming stream of edges.
+      --bootstrap=<bootstrap clusters file>   Bootstrap clusters.
+      --chunk-length=<chunk length>           Parameter C.
+      --max-num-edges=<max num edges>         Parameter N [default: inf].
+      --dataset=<dataset>                     'all', 'ydc', 'gfc' [default: all].
 )";
 
 void allocate_random_bits(vector<vector<uint64_t>>&, mt19937_64&, uint32_t);
