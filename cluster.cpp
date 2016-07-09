@@ -107,7 +107,7 @@ void update_distances_and_clusters(uint32_t gid,
                                    vector<bitset<L>>& centroid_sketches,
                                    vector<vector<double>>& centroid_projections,
                                    vector<uint32_t>& cluster_sizes,
-                                   vector<int>& cluster_map,
+                                   unordered_map<uint32_t,int>& cluster_map,
                                    vector<double>& anomaly_scores,
                                    double anomaly_threshold,
                                    const vector<double>& cluster_thresholds) {
@@ -138,7 +138,12 @@ void update_distances_and_clusters(uint32_t gid,
 
   // set its anomaly score to distance from nearest centroid
   anomaly_scores[gid] = min_distance;
-  int current_cluster = cluster_map[gid];
+  int current_cluster;
+  if (cluster_map.find(gid) != cluster_map.end()) {
+    current_cluster = cluster_map[gid];
+  } else {
+    current_cluster = UNSEEN;
+  }
 #ifdef DEBUG
   cout << "\tCurrent cluster: " << current_cluster << endl;
 #endif
