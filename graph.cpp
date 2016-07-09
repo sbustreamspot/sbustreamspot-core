@@ -111,6 +111,7 @@ unordered_map<string,uint32_t>
       // outgoing edges are already sorted by timestamp
       for (auto& e : g.at(make_pair(uid, utype))) {
         auto& vid = get<0>(e);
+        assert(uid != vid); // no self loops
         d[vid] = d[uid] + 1;
         q.push(e);
       }
