@@ -14,8 +14,7 @@ Sample execution:
 ```
 cat training/infoleak_small_units.CDM13.ss | \
     ./streamspot --edges=training/infoleak_small_units.CDM13.ss \
-                 --bootstrap=clusters/infoleak_small_units.CDM13.cl \
-        python pipe_stdout_to_kafka.py --url <kafka url>
+                 --bootstrap=clusters/infoleak_small_units.CDM13.cl
 ```
 
    * Input edges in the StreamSpot format are read from STDIN.
