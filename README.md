@@ -8,6 +8,8 @@
 
 **This is a modification of the original StreamSpot core for the DARPA engagement**
 
+Build with `make optimized`. No external dependencies.
+
 Sample execution:
 ```
 cat training/infoleak_small_units.CDM13.ss | \
