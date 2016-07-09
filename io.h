@@ -15,9 +15,8 @@
 namespace std {
 
 tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>,uint32_t>
-  read_edges(string filename, const unordered_set<uint32_t>& train_gids,
-             const unordered_set<uint32_t>& scenarios);
-tuple<vector<vector<uint32_t>>, vector<double>, double>
+  read_edges(string filename, const unordered_set<uint32_t>& train_gids);
+tuple<vector<vector<uint32_t>>, vector<double>, double, uint32_t>
   read_bootstrap_clusters(string bootstrap_file);
 
 }

@@ -22,15 +22,13 @@
 namespace std {
 
 tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
-  read_edges(string filename, const unordered_set<uint32_t>& train_gids,
-             const unordered_set<uint32_t>& scenarios) {
+  read_edges(string filename, const unordered_set<uint32_t>& train_gids) {
   // read edges into memory
-  cout << "Reading edges from: " << filename << endl;
+  cerr << "Reading training edges from: " << filename << endl;
 
   vector<edge> train_edges;
   unordered_map<uint32_t,vector<edge>> test_edges;
   uint32_t num_test_edges = 0;
-  uint32_t num_dropped_edges = 0;
   uint32_t num_train_edges = 0;
 
   // get file size
@@ -94,22 +92,17 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
 
     i++; // skip newline
 
-    uint32_t scenario = graph_id / 100;
-    if (scenarios.find(scenario) != scenarios.end()) {
-      // add an edge to memory
-      if (train_gids.find(graph_id) != train_gids.end()) {
-        train_edges.push_back(make_tuple(src_id, src_type,
-                                         dst_id, dst_type,
-                                         e_type, graph_id));
-        num_train_edges++;
-      } else {
-        test_edges[graph_id].push_back(make_tuple(src_id, src_type,
-                                                  dst_id, dst_type,
-                                                  e_type, graph_id));
-        num_test_edges++;
-      }
+    // add an edge to memory
+    if (train_gids.find(graph_id) != train_gids.end()) {
+      train_edges.push_back(make_tuple(src_id, src_type,
+                                       dst_id, dst_type,
+                                       e_type, graph_id));
+      num_train_edges++;
     } else {
-      num_dropped_edges++;
+      test_edges[graph_id].push_back(make_tuple(src_id, src_type,
+                                                dst_id, dst_type,
+                                                e_type, graph_id));
+      num_test_edges++;
     }
 
     line++;
@@ -131,17 +124,18 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   return make_tuple(max_gid + 1, train_edges, test_edges, num_test_edges);
 }
 
-tuple<vector<vector<uint32_t>>, vector<double>, double>
+tuple<vector<vector<uint32_t>>, vector<double>, double, uint32_t>
   read_bootstrap_clusters(string bootstrap_file) {
   int nclusters;
   double global_threshold;
+  uint32_t chunk_length;
   ifstream f(bootstrap_file);
   string line;
   stringstream ss;
 
   getline(f, line);
   ss.str(line);
-  ss >> nclusters >> global_threshold;
+  ss >> nclusters >> global_threshold >> chunk_length;
   vector<double> cluster_thresholds(nclusters);
   vector<vector<uint32_t>> clusters(nclusters);
 
@@ -160,7 +154,7 @@ tuple<vector<vector<uint32_t>>, vector<double>, double>
     }
   }
 
-  return make_tuple(clusters, cluster_thresholds, global_threshold);
+  return make_tuple(clusters, cluster_thresholds, global_threshold, chunk_length);
 }
 
 }
