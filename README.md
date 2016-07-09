@@ -8,13 +8,41 @@
 
 **This is a modification of the original StreamSpot core for the DARPA engagement**
 
-Build with `make optimized`. No external dependencies.
+Build:
+   * C++ code with `make optimized`.
+   * Python dependencies with `pip install -r requirements.txt`
 
-Sample execution:
+Requires:
+   * The [sbustreamspot-cdm](https://github.com/sbustreamspot/sbustreamspot-cdm)
+     code in the parent directory of this code.
+   * The [sbustreamspot-train](https://github.com/sbustreamspot/sbustreamspot-train)
+     code in the parent directory of this code.
+   * Training edges in StreamSpot format in a file, assumed to be `training/infoleak_small_units.CDM13.ss`.
+   * Bootstrap clusters in a file, assumed to be `clusters/infoleak_small_units.CDM13.cl`.
+
+Sample execution from file to STDOUT:
 ```
 cat training/infoleak_small_units.CDM13.ss | \
     ./streamspot --edges=training/infoleak_small_units.CDM13.ss \
                  --bootstrap=clusters/infoleak_small_units.CDM13.cl
+```
+
+Sample execution from file to Kafka:
+```
+cat training/infoleak_small_units.CDM13.ss | \
+    ./streamspot --edges=training/infoleak_small_units.CDM13.ss \
+                 --bootstrap=clusters/infoleak_small_units.CDM13.cl \
+        python pipe_stdout_to_kafka.py --url ta3.tc.dev:9092 --topic streamspot
+```
+
+Sample execution from Kafka to Kafka:
+```
+python ../sbustreamspot-cdm/translate_cdm_to_streamspot.py \
+                 --url ta3.tc.dev:9092 --format avro --source kafka
+                 --kafka-topic ta3data --kafka-group streamspot-group | \ 
+    ./streamspot --edges=training/infoleak_small_units.CDM13.ss \
+                 --bootstrap=clusters/infoleak_small_units.CDM13.cl \
+        python pipe_stdout_to_kafka.py --url ta3.tc.dev:9092 --topic streamspot
 ```
 
    * Input edges in the StreamSpot format are read from STDIN.

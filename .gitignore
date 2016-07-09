@@ -6,6 +6,7 @@ streamspot
 *.pyc
 *.pdf
 results/
+env/
 
 # Compiled Object files
 *.slo
