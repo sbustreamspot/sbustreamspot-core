@@ -40,7 +40,7 @@ void update_distances_and_clusters(uint32_t gid,
                                    vector<bitset<L>>& centroid_sketches,
                                    vector<vector<double>>& centroid_projections,
                                    vector<uint32_t>& cluster_sizes,
-                                   vector<int>& cluster_map,
+                                   unordered_map<uint32_t,int>& cluster_map,
                                    vector<double>& anomaly_scores,
                                    double anomaly_threshold,
                                    const vector<double>& cluster_thresholds);
