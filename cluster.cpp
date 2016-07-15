@@ -74,8 +74,9 @@ void get_shared_bucket_graphs(const bitset<L>& sketch,
 }
 
 tuple<vector<bitset<L>>, vector<vector<double>>>
-construct_centroid_sketches(const vector<vector<int>>& streamhash_projections,
-                            const vector<vector<uint32_t>>& clusters,
+construct_centroid_sketches(const unordered_map<string,vector<int>>&
+                              streamhash_projections,
+                            const vector<vector<string>>& clusters,
                             uint32_t nclusters) {
   vector<bitset<L>> centroid_sketches(nclusters);
   vector<vector<double>> centroid_projections(nclusters, vector<double>(L, 0.0));
@@ -84,7 +85,7 @@ construct_centroid_sketches(const vector<vector<int>>& streamhash_projections,
     for (auto& gid : clusters[c]) {
       // add the projection vector of this graph to the centroid's
       for (uint32_t l = 0; l < L; l++) {
-        centroid_projections[c][l] += streamhash_projections[gid][l];
+        centroid_projections[c][l] += streamhash_projections.at(gid)[l];
       }
     }
   }
@@ -100,15 +101,17 @@ construct_centroid_sketches(const vector<vector<int>>& streamhash_projections,
   return make_tuple(centroid_sketches, centroid_projections);
 }
 
-void update_distances_and_clusters(uint32_t gid,
+void update_distances_and_clusters(string gid,
                                    const vector<int>& projection_delta,
-                                   const vector<bitset<L>>& graph_sketches,
-                                   const vector<vector<int>>& graph_projections,
+                                   const unordered_map<string,bitset<L>>&
+                                    graph_sketches,
+                                   const unordered_map<string,vector<int>>&
+                                    graph_projections,
                                    vector<bitset<L>>& centroid_sketches,
                                    vector<vector<double>>& centroid_projections,
                                    vector<uint32_t>& cluster_sizes,
-                                   unordered_map<uint32_t,int>& cluster_map,
-                                   vector<double>& anomaly_scores,
+                                   unordered_map<string,int>& cluster_map,
+                                   unordered_map<string,double>& anomaly_scores,
                                    double anomaly_threshold,
                                    const vector<double>& cluster_thresholds) {
   // calculate distance of graph to all cluster centroids
@@ -122,7 +125,7 @@ void update_distances_and_clusters(uint32_t gid,
 #endif
   for (uint32_t i = 0; i < nclusters; i++) {
     distances[i] = 1.0 -
-      cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+      cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
                                           centroid_sketches[i])));
 #ifdef DEBUG
     cout << distances[i] << " ";
@@ -163,7 +166,7 @@ void update_distances_and_clusters(uint32_t gid,
       // update cluster centroid projection/sketch
       auto& centroid_p = centroid_projections[current_cluster];
       auto& centroid_s = centroid_sketches[current_cluster];
-      auto& graph_projection = graph_projections[gid];
+      auto& graph_projection = graph_projections.at(gid);
       for (uint32_t l = 0; l < L; l++) {
         centroid_p[l] = (centroid_p[l] * old_cluster_size -
                           (graph_projection[l] - projection_delta[l])) /
@@ -174,7 +177,7 @@ void update_distances_and_clusters(uint32_t gid,
       // update anomaly score if current cluster == nearest cluster (centroid moved)
       if (current_cluster == nearest_cluster) {
         anomaly_scores[gid] = 1.0 -
-          cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+          cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
                                               centroid_s)));
       }
     }
@@ -196,7 +199,7 @@ void update_distances_and_clusters(uint32_t gid,
         // update cluster centroid projection/sketch
         auto& centroid_p = centroid_projections[current_cluster];
         auto& centroid_s = centroid_sketches[current_cluster];
-        auto& graph_projection = graph_projections[gid];
+        auto& graph_projection = graph_projections.at(gid);
 
 #ifdef DEBUG
         cout << "\tPrev. cluster centroid before removing graph:";
@@ -229,7 +232,7 @@ void update_distances_and_clusters(uint32_t gid,
       // update new cluster centroid projection/sketch
       auto& centroid_p = centroid_projections[nearest_cluster];
       auto& centroid_s = centroid_sketches[nearest_cluster];
-      auto& graph_projection = graph_projections[gid];
+      auto& graph_projection = graph_projections.at(gid);
 
 #ifdef DEBUG
       cout << "\tNew cluster centroid before adding graph: ";
@@ -251,7 +254,7 @@ void update_distances_and_clusters(uint32_t gid,
 
       // update anomaly score wrt. nearest cluster (centroid moved)
       anomaly_scores[gid] = 1.0 -
-        cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+        cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
                                             centroid_s)));
 
 #ifdef DEBUG
@@ -287,7 +290,7 @@ void update_distances_and_clusters(uint32_t gid,
 
       // update anomaly score wrt. nearest cluster (centroid moved)
       anomaly_scores[gid] = 1.0 -
-        cos(PI*(1.0 - streamhash_similarity(graph_sketches[gid],
+        cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
                                             centroid_s)));
 
 #ifdef DEBUG

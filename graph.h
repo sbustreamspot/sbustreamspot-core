@@ -27,25 +27,28 @@ namespace std {
 //#define F_T               5           // timestamp
 #define F_GID             5           // graph id (tag)
 
+#define UUID_SIZE         32
+
 // data structures
-typedef tuple<uint32_t,char,uint32_t,char,char,uint32_t> edge;
-typedef unordered_map<pair<uint32_t,char>,
-                      vector<tuple<uint32_t,char,char>>> graph;
+typedef tuple<string,char,string,char,char,string> edge;
+typedef unordered_map<pair<string,char>,
+                      vector<tuple<string,char,char>>> graph;
 typedef vector<uint32_t> shingle_vector;
 
-void update_graphs(edge& e, vector<graph>& graphs);
-void remove_from_graph(edge& e, vector<graph>& graphs);
+void update_graphs(edge& e, unordered_map<string,graph>& graphs);
+void remove_from_graph(edge& e, unordered_map<string,graph>& graphs);
 void print_edge(edge& e);
 void print_graph(graph& g);
 unordered_map<string,uint32_t>
   construct_temp_shingle_vector(const graph& g, uint32_t chunk_length);
-void construct_shingle_vectors(vector<shingle_vector>& shingle_vectors,
+void construct_shingle_vectors(unordered_map<string,shingle_vector>& shingle_vectors,
                                unordered_map<string,uint32_t>& shingle_id,
-                               vector<graph>& graphs, uint32_t chunk_length);
+                               unordered_map<string,graph>& graphs,
+                               uint32_t chunk_length);
 tuple<vector<int>, chrono::nanoseconds, chrono::nanoseconds>
-update_streamhash_sketches(const edge& e, const vector<graph>& graphs,
-                           vector<bitset<L>>& streamhash_sketches,
-                           vector<vector<int>>& streamhash_projections,
+update_streamhash_sketches(const edge& e, const unordered_map<string,graph>& graphs,
+                           unordered_map<string,bitset<L>>& streamhash_sketches,
+                           unordered_map<string,vector<int>>& streamhash_projections,
                            uint32_t chunk_length,
                            const vector<vector<uint64_t>>& H);
 double cosine_similarity(const shingle_vector& sv1, const shingle_vector& sv2);

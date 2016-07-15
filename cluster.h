@@ -30,18 +30,21 @@ void get_shared_bucket_graphs(const bitset<L>& sketch,
                                                    vector<uint32_t>>>& hash_tables,
                               unordered_set<uint32_t>& shared_bucket_graphs);
 tuple<vector<bitset<L>>, vector<vector<double>>>
-construct_centroid_sketches(const vector<vector<int>>& streamhash_projections,
-                            const vector<vector<uint32_t>>& bootstrap_clusters,
+construct_centroid_sketches(const unordered_map<string,vector<int>>&
+                              streamhash_projections,
+                            const vector<vector<string>>& clusters,
                             uint32_t nclusters);
-void update_distances_and_clusters(uint32_t gid,
+void update_distances_and_clusters(string gid,
                                    const vector<int>& projection_delta,
-                                   const vector<bitset<L>>& graph_sketches,
-                                   const vector<vector<int>>& graph_projections,
+                                   const unordered_map<string,bitset<L>>&
+                                    graph_sketches,
+                                   const unordered_map<string,vector<int>>&
+                                    graph_projections,
                                    vector<bitset<L>>& centroid_sketches,
                                    vector<vector<double>>& centroid_projections,
                                    vector<uint32_t>& cluster_sizes,
-                                   unordered_map<uint32_t,int>& cluster_map,
-                                   vector<double>& anomaly_scores,
+                                   unordered_map<string,int>& cluster_map,
+                                   unordered_map<string,double>& anomaly_scores,
                                    double anomaly_threshold,
                                    const vector<double>& cluster_thresholds);
 

@@ -4,6 +4,7 @@
  * http://www3.cs.stonybrook.edu/~emanzoor/streamspot/
  */
 
+#include <cassert>
 #include <fcntl.h>
 #include <fstream>
 #include "graph.h"
@@ -21,13 +22,13 @@
 
 namespace std {
 
-tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
-  read_edges(string filename, const unordered_set<uint32_t>& train_gids) {
+tuple<uint32_t,vector<edge>,unordered_map<string,vector<edge>>, uint32_t>
+  read_edges(string filename, const unordered_set<string>& train_gids) {
   // read edges into memory
   cerr << "Reading training edges from: " << filename << endl;
 
   vector<edge> train_edges;
-  unordered_map<uint32_t,vector<edge>> test_edges;
+  unordered_map<string,vector<edge>> test_edges;
   uint32_t num_test_edges = 0;
   uint32_t num_train_edges = 0;
 
@@ -37,8 +38,13 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   fstat(fd, &fstatbuf);
 
   // memory map the file
+#ifdef __linux__
+  static const int mmap_flags = MAP_PRIVATE|MAP_POPULATE;
+#else
+  static const int mmap_flags = MAP_PRIVATE;
+#endif
   char *data = (char*) mmap(NULL, fstatbuf.st_size, PROT_READ,
-                            MAP_PRIVATE|MAP_POPULATE, fd, 0);
+                            mmap_flags, fd, 0);
   madvise(data, fstatbuf.st_size, MADV_SEQUENTIAL);
 
   if (data < 0) { // mmap failed
@@ -50,13 +56,13 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   // read edges from the file
   uint32_t i = 0;
   uint32_t line = 0;
-  uint32_t max_gid = 0;
+  unordered_set<string> graph_ids; 
   char src_type, dst_type, e_type;
   while (i < fstatbuf.st_size) {
     // field 1: source id
-    uint32_t src_id = data[i] - '0';
-    while (data[++i] != DELIMITER) {
-      src_id = src_id * 10 + (data[i] - '0');
+    string src_id(' ', UUID_SIZE);
+    for (uint32_t j = 0; j < UUID_SIZE; j++, i++) {
+      src_id[j] = data[i];
     }
 
     i++; // skip delimiter
@@ -66,10 +72,11 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
     i += 2; // skip delimiter
 
     // field 3: dest id
-    uint32_t dst_id = data[i] - '0';
-    while (data[++i] != DELIMITER) {
-      dst_id = dst_id * 10 + (data[i] - '0');
+    string dst_id(' ', UUID_SIZE);
+    for (uint32_t j = 0; j < UUID_SIZE; j++, i++) {
+      dst_id[j] = data[i];
     }
+
     i++; // skip delimiter
 
     // field 4: dest type
@@ -81,18 +88,17 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
     i += 2; // skip delimiter
 
     // field 7: graph id
-    uint32_t graph_id = data[i] - '0';
-    while (data[++i] != '\n') {
-      graph_id = graph_id * 10 + (data[i] - '0');
+    string graph_id(' ', UUID_SIZE);
+    for (uint32_t j = 0; j < UUID_SIZE; j++, i++) {
+      graph_id[j] = data[i];
     }
 
-    if (graph_id > max_gid) {
-      max_gid = graph_id;
-    }
+    graph_ids.insert(graph_id);
 
     i++; // skip newline
 
     // add an edge to memory
+    assert (train_gids.find(graph_id) != train_gids.end());
     if (train_gids.find(graph_id) != train_gids.end()) {
       train_edges.push_back(make_tuple(src_id, src_type,
                                        dst_id, dst_type,
@@ -121,10 +127,10 @@ tuple<uint32_t,vector<edge>,unordered_map<uint32_t,vector<edge>>, uint32_t>
   cout << "Test edges: " << num_test_edges << endl;
 #endif
 
-  return make_tuple(max_gid + 1, train_edges, test_edges, num_test_edges);
+  return make_tuple(graph_ids.size(), train_edges, test_edges, num_test_edges);
 }
 
-tuple<vector<vector<uint32_t>>, vector<double>, double, uint32_t>
+tuple<vector<vector<string>>, vector<double>, double, uint32_t>
   read_bootstrap_clusters(string bootstrap_file) {
   int nclusters;
   double global_threshold;
@@ -137,7 +143,7 @@ tuple<vector<vector<uint32_t>>, vector<double>, double, uint32_t>
   ss.str(line);
   ss >> nclusters >> global_threshold >> chunk_length;
   vector<double> cluster_thresholds(nclusters);
-  vector<vector<uint32_t>> clusters(nclusters);
+  vector<vector<string>> clusters(nclusters);
 
   for (int i = 0; i < nclusters; i++) {
     getline(f, line);
@@ -148,7 +154,7 @@ tuple<vector<vector<uint32_t>>, vector<double>, double, uint32_t>
     ss >> cluster_threshold;
     cluster_thresholds[i] = cluster_threshold;
 
-    uint32_t gid;
+    string gid;
     while (ss >> gid) {
       clusters[i].push_back(gid);
     }
