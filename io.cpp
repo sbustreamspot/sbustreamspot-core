@@ -135,13 +135,14 @@ tuple<vector<vector<string>>, vector<double>, double, uint32_t>
   int nclusters;
   double global_threshold;
   uint32_t chunk_length;
+  uint32_t num_training_graphs;
   ifstream f(bootstrap_file);
   string line;
   stringstream ss;
 
   getline(f, line);
   ss.str(line);
-  ss >> nclusters >> global_threshold >> chunk_length;
+  ss >> nclusters >> num_training_graphs >> chunk_length >> global_threshold;
   vector<double> cluster_thresholds(nclusters);
   vector<vector<string>> clusters(nclusters);
 
