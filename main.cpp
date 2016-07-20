@@ -113,10 +113,14 @@ int main(int argc, char *argv[]) {
   cerr << "C=" << chunk_length << ", ";
   cerr << "L=" << L << ")";
 
+  // convert thresholds from cosine distances to normalized angular distances
+  global_threshold = acos(1 - global_threshold)/PI;
+
   unordered_set<string> train_gids;
   uint32_t nclusters = clusters.size();
   vector<uint32_t> cluster_sizes(nclusters);
   for (uint32_t i = 0; i < nclusters; i++) {
+    cluster_thresholds[i] = acos(1 - cluster_thresholds[i])/PI;
     cluster_sizes[i] = clusters[i].size();
     for (auto& gid : clusters[i]) {
       train_gids.insert(gid);
