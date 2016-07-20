@@ -201,10 +201,12 @@ int main(int argc, char *argv[]) {
   // compute distances of training graphs to their cluster centroids
   unordered_map<string,double> anomaly_scores;
   for (auto& gid : train_gids) {
-    // anomaly score is a "distance", hence the 1.0 - x
-    anomaly_scores[gid] = 1.0 -
-      cos(PI*(1.0 - streamhash_similarity(streamhash_sketches[gid],
-                                          centroid_sketches[cluster_map[gid]])));
+    // streamhash sim lies between 0.0 and 1.0 so
+    // angle lies between PI (least similar) and 0 (most similar)
+    // anomaly score is normalised angle, lies between 1 (least similar) and 0
+    double normalized_angle = 1.0 - streamhash_similarity(streamhash_sketches[gid],
+                                              centroid_sketches[cluster_map[gid]]);
+    anomaly_scores[gid] = normalized_angle;
   }
 
 #ifdef DEBUG

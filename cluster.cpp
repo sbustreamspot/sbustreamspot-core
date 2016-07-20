@@ -124,9 +124,8 @@ void update_distances_and_clusters(string gid,
   cout << "\tDistances: ";
 #endif
   for (uint32_t i = 0; i < nclusters; i++) {
-    distances[i] = 1.0 -
-      cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
-                                          centroid_sketches[i])));
+    distances[i] = 1.0 - streamhash_similarity(graph_sketches.at(gid),
+                                               centroid_sketches[i]);
 #ifdef DEBUG
     cout << distances[i] << " ";
 #endif
@@ -176,9 +175,8 @@ void update_distances_and_clusters(string gid,
 
       // update anomaly score if current cluster == nearest cluster (centroid moved)
       if (current_cluster == nearest_cluster) {
-        anomaly_scores[gid] = 1.0 -
-          cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
-                                              centroid_s)));
+        anomaly_scores[gid] = 1.0 - streamhash_similarity(graph_sketches.at(gid),
+                                                          centroid_s);
       }
     }
   } else { // else if distance <= threshold:
@@ -253,9 +251,8 @@ void update_distances_and_clusters(string gid,
       }
 
       // update anomaly score wrt. nearest cluster (centroid moved)
-      anomaly_scores[gid] = 1.0 -
-        cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
-                                            centroid_s)));
+      anomaly_scores[gid] = 1.0 - streamhash_similarity(graph_sketches.at(gid),
+                                                        centroid_s);
 
 #ifdef DEBUG
       cout << "\tNew cluster centroid after adding graph: ";
@@ -289,9 +286,8 @@ void update_distances_and_clusters(string gid,
       }
 
       // update anomaly score wrt. nearest cluster (centroid moved)
-      anomaly_scores[gid] = 1.0 -
-        cos(PI*(1.0 - streamhash_similarity(graph_sketches.at(gid),
-                                            centroid_s)));
+      anomaly_scores[gid] = 1.0 - streamhash_similarity(graph_sketches.at(gid),
+                                                        centroid_s);
 
 #ifdef DEBUG
       cout << "\tExisting cluster centroid after modifying graph: ";
