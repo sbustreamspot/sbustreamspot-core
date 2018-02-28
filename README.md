@@ -10,6 +10,7 @@
 
 Build:
    * C++ code with `make optimized`.
+   * Python C bindings with: `apt-get install python-dev`
    * Python dependencies with `pip install -r requirements.txt`
 
 Requires:
